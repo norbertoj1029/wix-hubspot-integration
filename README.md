@@ -17,6 +17,7 @@ Reviewer access:
 ```text
 No external Wix or HubSpot credentials are required for the local demo.
 The app runs in mock mode by default and includes dashboard buttons to test each flow.
+Default local demo key: dev-webhook-secret
 ```
 
 ## Architecture
@@ -86,6 +87,8 @@ cp .env.example .env
 ```
 
 The npm scripts load `.env` automatically when the file exists.
+
+For a clean local demo, delete `data/app-db.json` before starting the app. The file is generated automatically and is ignored by Git.
 
 Run tests:
 
@@ -372,9 +375,10 @@ Production persistence should replace `data/app-db.json` with database tables fo
 
 ## Demo Flow
 
-1. Click `Connect HubSpot` to connect in mock mode.
-2. Review or edit field mappings.
-3. Click `Sync Wix to HubSpot` to simulate a Wix contact event.
-4. Click `Sync HubSpot to Wix` to simulate a HubSpot webhook event.
-5. Click `Capture Lead` to simulate a Wix form submission with attribution.
-6. Review sync events and record counts in the dashboard.
+1. Open `http://localhost:3000`.
+2. Enter `dev-webhook-secret` in the Webhook API key field.
+3. Click `Connect HubSpot`.
+4. Click `Sync Wix to HubSpot` twice to see create/update behavior on the same demo contact.
+5. Click `Sync HubSpot to Wix` twice to see create/update behavior on the same demo contact.
+6. Click `Capture Lead`.
+7. Review `Sync Activity` and `Demo Records`.
