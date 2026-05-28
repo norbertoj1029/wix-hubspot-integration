@@ -12,6 +12,8 @@ The demo intentionally avoids Wix Editor setup. It exposes webhook-style endpoin
 - HubSpot contact to Wix contact sync
 - Wix form submission lead capture with UTM/source context
 - Default attribution mappings for `utm_source`, `utm_campaign`, `pageUrl`, and `referrer`
+- Expanded contact/attribution mappings including company, UTM medium, UTM term, and UTM content
+- Timestamp conflict handling using a latest-updated-wins rule
 - Contact ID mapping: `wixContactId <-> hubspotContactId`
 - Loop prevention using `syncId`, source tracking, and idempotent updates
 - API key protection for webhook-style sync endpoints
@@ -63,7 +65,7 @@ Sync data model:
 - Store `syncId`, `source`, and timestamps for each sync event
 - Ignore duplicate events with the same correlation ID
 - Avoid rewriting identical values
-- Conflict strategy: latest updated timestamp wins; if timestamps are unavailable, prefer deterministic source priority configured per mapping
+- Conflict strategy: latest updated timestamp wins. Wix events older than the last accepted HubSpot update are skipped, and HubSpot events older than the last accepted Wix update are skipped.
 
 ### Feature 2: Form and Lead Capture
 

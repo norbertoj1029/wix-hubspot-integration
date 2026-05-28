@@ -24,13 +24,27 @@ export const defaultMappings = [
     id: "map_phone",
     wixField: "phone",
     hubspotProperty: "phone",
-    direction: "wix-to-hubspot",
+    direction: "bidirectional",
+    transform: "trim"
+  },
+  {
+    id: "map_company",
+    wixField: "company",
+    hubspotProperty: "company",
+    direction: "bidirectional",
     transform: "trim"
   },
   {
     id: "map_utm_source",
     wixField: "utm_source",
     hubspotProperty: "wix_utm_source",
+    direction: "wix-to-hubspot",
+    transform: "trim"
+  },
+  {
+    id: "map_utm_medium",
+    wixField: "utm_medium",
+    hubspotProperty: "wix_utm_medium",
     direction: "wix-to-hubspot",
     transform: "trim"
   },
@@ -52,6 +66,20 @@ export const defaultMappings = [
     id: "map_referrer",
     wixField: "referrer",
     hubspotProperty: "wix_referrer",
+    direction: "wix-to-hubspot",
+    transform: "trim"
+  },
+  {
+    id: "map_utm_term",
+    wixField: "utm_term",
+    hubspotProperty: "wix_utm_term",
+    direction: "wix-to-hubspot",
+    transform: "trim"
+  },
+  {
+    id: "map_utm_content",
+    wixField: "utm_content",
+    hubspotProperty: "wix_utm_content",
     direction: "wix-to-hubspot",
     transform: "trim"
   }
