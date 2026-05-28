@@ -8,6 +8,8 @@ const connectionBadge = document.querySelector("#connectionBadge");
 const logs = document.querySelector("#logs");
 const modeValue = document.querySelector("#modeValue");
 const apiKeyInput = document.querySelector("#apiKeyInput");
+const wixFieldOptions = document.querySelector("#wixFieldOptions");
+const hubspotPropertyOptions = document.querySelector("#hubspotPropertyOptions");
 
 const directionOptions = [
   ["bidirectional", "Bi-directional"],
@@ -20,6 +22,36 @@ const transformOptions = [
   ["trim", "Trim"],
   ["lowercase", "Lowercase"],
   ["uppercase", "Uppercase"]
+];
+
+const wixFieldCatalog = [
+  "email",
+  "firstName",
+  "lastName",
+  "phone",
+  "company",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+  "pageUrl",
+  "referrer"
+];
+
+const hubspotPropertyCatalog = [
+  "email",
+  "firstname",
+  "lastname",
+  "phone",
+  "company",
+  "wix_utm_source",
+  "wix_utm_medium",
+  "wix_utm_campaign",
+  "wix_utm_term",
+  "wix_utm_content",
+  "wix_page_url",
+  "wix_referrer"
 ];
 
 const demoIds = {
@@ -66,16 +98,23 @@ function escapeHtml(value) {
 function renderMappings() {
   mappingRows.innerHTML = state.mappings
     .map(
-      (mapping, index) => `
+        (mapping, index) => `
         <tr data-index="${index}">
-          <td><input data-field="wixField" value="${escapeHtml(mapping.wixField)}" /></td>
-          <td><input data-field="hubspotProperty" value="${escapeHtml(mapping.hubspotProperty)}" /></td>
+          <td><input data-field="wixField" list="wixFieldOptions" value="${escapeHtml(mapping.wixField)}" /></td>
+          <td><input data-field="hubspotProperty" list="hubspotPropertyOptions" value="${escapeHtml(mapping.hubspotProperty)}" /></td>
           <td><select data-field="direction">${optionList(directionOptions, mapping.direction)}</select></td>
           <td><select data-field="transform">${optionList(transformOptions, mapping.transform)}</select></td>
           <td><button class="secondary" data-delete="${index}" type="button">Remove</button></td>
         </tr>
       `
     )
+    .join("");
+}
+
+function renderCatalogOptions() {
+  wixFieldOptions.innerHTML = wixFieldCatalog.map((field) => `<option value="${escapeHtml(field)}"></option>`).join("");
+  hubspotPropertyOptions.innerHTML = hubspotPropertyCatalog
+    .map((property) => `<option value="${escapeHtml(property)}"></option>`)
     .join("");
 }
 
@@ -125,6 +164,7 @@ async function refresh() {
 }
 
 apiKeyInput.value = state.apiKey;
+renderCatalogOptions();
 apiKeyInput.addEventListener("input", (event) => {
   state.apiKey = event.currentTarget.value;
   localStorage.setItem("wixHubspotDemoApiKey", state.apiKey);

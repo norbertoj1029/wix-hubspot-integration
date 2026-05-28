@@ -3,6 +3,8 @@ import { upsertMockWixContact } from "../adapters/mockWixAdapter.js";
 import { id, now } from "../lib/time.js";
 import { mapHubSpotPropertiesToWix, mapWixFieldsToHubSpot } from "./fieldMapper.js";
 
+const APP_ORIGIN = "wix-hubspot-integration";
+
 export function logEvent(db, event) {
   const entry = {
     id: id("sync"),
@@ -13,6 +15,22 @@ export function logEvent(db, event) {
   db.syncEvents.unshift(entry);
   db.syncEvents = db.syncEvents.slice(0, 100);
   return entry;
+}
+
+function getOrigin(payload) {
+  return (
+    payload.origin ||
+    payload.source ||
+    payload.fields?.origin ||
+    payload.fields?.source ||
+    payload.properties?.origin ||
+    payload.properties?.source ||
+    payload.properties?.wix_hubspot_origin
+  );
+}
+
+function isSelfProducedEvent(payload) {
+  return getOrigin(payload) === APP_ORIGIN;
 }
 
 function findContactMapping(db, { wixContactId, hubspotContactId }) {
@@ -95,6 +113,16 @@ export function syncWixContactToHubSpot(db, payload) {
   const sourceUpdatedAt = getSourceUpdatedAt(payload, "wix");
   const mapping = findContactMapping(db, { wixContactId });
 
+  if (isSelfProducedEvent(payload)) {
+    return logEvent(db, {
+      source: "wix",
+      syncId,
+      status: "skipped",
+      message: "Ignored Wix event produced by this integration.",
+      details: { wixContactId, origin: APP_ORIGIN }
+    });
+  }
+
   if (mapping?.lastSyncId === syncId) {
     return logEvent(db, {
       source: "wix",
@@ -136,6 +164,16 @@ export function syncHubSpotContactToWix(db, payload) {
   const hubspotContactId = payload.hubspotContactId || id("hs");
   const sourceUpdatedAt = getSourceUpdatedAt(payload, "hubspot");
   const mapping = findContactMapping(db, { hubspotContactId });
+
+  if (isSelfProducedEvent(payload)) {
+    return logEvent(db, {
+      source: "hubspot",
+      syncId,
+      status: "skipped",
+      message: "Ignored HubSpot event produced by this integration.",
+      details: { hubspotContactId, origin: APP_ORIGIN }
+    });
+  }
 
   if (mapping?.lastSyncId === syncId) {
     return logEvent(db, {

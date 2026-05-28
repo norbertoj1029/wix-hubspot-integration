@@ -47,6 +47,8 @@ src/adapters/mockHubSpotAdapter.js
 src/storage/jsonStore.js
 ```
 
+The dashboard is a self-hosted stand-in for the Wix App Dashboard surface. In production, this same dashboard would be registered and embedded through Wix app configuration/Wix CLI with an app manifest, installation flow, and site-level tenant context.
+
 ## Features
 
 - HubSpot connect/disconnect flow with mock mode and production OAuth placeholders
@@ -59,6 +61,7 @@ src/storage/jsonStore.js
 - Timestamp conflict handling using a latest-updated-wins rule
 - Contact ID mapping: `wixContactId <-> hubspotContactId`
 - Loop prevention using `syncId`, source tracking, and idempotent updates
+- Origin-tag handling to ignore webhook echoes produced by this integration
 - API key protection for webhook-style sync endpoints
 - Sync activity log for observability
 
@@ -83,6 +86,12 @@ cp .env.example .env
 ```
 
 The npm scripts load `.env` automatically when the file exists.
+
+Run tests:
+
+```bash
+npm test
+```
 
 Quick demo path:
 
@@ -120,6 +129,7 @@ Mock mode:
 - Keeps OAuth tokens out of the browser by design
 - Does not return the webhook key from the API; reviewers enter the local demo key in the dashboard
 - Uses local demo IDs in the dashboard so repeated clicks demonstrate update flows
+- Uses datalist-backed field suggestions for the mapping table. Production would populate those dropdowns from Wix field metadata and HubSpot Properties API.
 
 Production mode:
 
@@ -149,6 +159,7 @@ Sync data model:
 - Store external ID mapping: `wixContactId <-> hubspotContactId`
 - Store `syncId`, `source`, and timestamps for each sync event
 - Ignore duplicate events with the same correlation ID
+- Ignore webhook events with `origin: "wix-hubspot-integration"` so writes from this app do not echo back into another write
 - Avoid rewriting identical values
 - Conflict strategy: latest updated timestamp wins. Wix events older than the last accepted HubSpot update are skipped, and HubSpot events older than the last accepted Wix update are skipped.
 
@@ -338,6 +349,8 @@ http://localhost:3000/api/auth/hubspot/callback
 4. Change `HUBSPOT_MODE=real`.
 5. Register Wix contact/form event webhooks to the endpoints in this app.
 6. Replace mock adapters with real Wix and HubSpot API clients.
+7. Register the dashboard as the Wix App Dashboard surface with Wix CLI/app manifest configuration.
+8. Add a HubSpot webhook subscription or polling worker for inbound HubSpot contact changes.
 
 Production persistence should replace `data/app-db.json` with database tables for:
 
@@ -354,6 +367,8 @@ Production persistence should replace `data/app-db.json` with database tables fo
 - Real HubSpot token exchange is represented as a server-side route placeholder.
 - JSON storage is for local review only and should be replaced before deployment.
 - Webhook API key protection should be upgraded to provider signature validation in production.
+- Field mapping suggestions are static in mock mode; production should load real field catalogs.
+- The local JSON store is not concurrency-safe and should be replaced with transactional persistence.
 
 ## Demo Flow
 
