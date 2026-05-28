@@ -5,3 +5,12 @@ export class AdapterNotConfiguredError extends Error {
     this.statusCode = 501;
   }
 }
+
+export class AdapterHttpError extends Error {
+  constructor(message, statusCode, details = {}) {
+    super(message);
+    this.name = "AdapterHttpError";
+    this.statusCode = statusCode;
+    this.details = details;
+  }
+}

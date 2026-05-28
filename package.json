@@ -2,7 +2,7 @@
   "name": "wix-hubspot-integration",
   "version": "0.1.0",
   "private": true,
-  "description": "Self-hosted Wix to HubSpot integration prototype for bidirectional contact sync and lead capture.",
+  "description": "Self-hosted Wix to HubSpot integration with OAuth, contact sync, webhooks, and lead capture.",
   "type": "module",
   "scripts": {
     "dev": "node --env-file-if-exists=.env src/server.js",
@@ -10,6 +10,6 @@
     "test": "node --test"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   }
 }
