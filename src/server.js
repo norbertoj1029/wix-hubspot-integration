@@ -19,6 +19,9 @@ const appBaseUrl = process.env.APP_BASE_URL || `http://localhost:${port}`;
 const hubspotMode = process.env.HUBSPOT_MODE || "mock";
 const webhookApiKey = process.env.WEBHOOK_API_KEY || "dev-webhook-secret";
 const protectedRoutes = new Set([
+  "/api/auth/hubspot/connect",
+  "/api/auth/hubspot/disconnect",
+  "/api/mappings",
   "/api/sync/wix-contact",
   "/api/sync/hubspot-contact",
   "/api/forms/wix-submission"
@@ -64,6 +67,27 @@ function isAuthorizedWebhook(req) {
   const authHeader = req.headers.authorization || "";
   const bearerKey = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
   return timingSafeEqual(headerKey, webhookApiKey) || timingSafeEqual(bearerKey, webhookApiKey);
+}
+
+const sensitiveKeys = new Set([
+  "email",
+  "firstname",
+  "firstName",
+  "lastname",
+  "lastName",
+  "phone",
+  "message"
+]);
+
+function redactSensitive(value) {
+  if (Array.isArray(value)) return value.map((item) => redactSensitive(item));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, childValue]) => [
+      key,
+      sensitiveKeys.has(key) ? "[redacted]" : redactSensitive(childValue)
+    ])
+  );
 }
 
 function readBody(req) {
@@ -123,10 +147,9 @@ async function routeApi(req, res) {
       mappings: db.mappings,
       contactMappings: db.contactMappings,
       syncEvents: db.syncEvents,
-      formSubmissions: db.formSubmissions,
-      mockHubSpotContacts: db.mockHubSpotContacts,
-      mockWixContacts: db.mockWixContacts,
-      demoWebhookApiKey: webhookApiKey
+      formSubmissions: redactSensitive(db.formSubmissions),
+      mockHubSpotContacts: redactSensitive(db.mockHubSpotContacts),
+      mockWixContacts: redactSensitive(db.mockWixContacts)
     });
   }
 

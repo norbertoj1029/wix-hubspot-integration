@@ -88,11 +88,12 @@ Quick demo path:
 
 ```text
 1. Open http://localhost:3000
-2. Click Connect HubSpot
-3. Click Sync Wix to HubSpot twice to see create/update behavior on the same demo contact
-4. Click Sync HubSpot to Wix twice to see create/update behavior on the same demo contact
-5. Click Capture Lead
-6. Review Sync Activity and Demo Records
+2. Enter dev-webhook-secret in the Webhook API key field
+3. Click Connect HubSpot
+4. Click Sync Wix to HubSpot twice to see create/update behavior on the same demo contact
+5. Click Sync HubSpot to Wix twice to see create/update behavior on the same demo contact
+6. Click Capture Lead
+7. Review Sync Activity and Demo Records
 ```
 
 Environment variables:
@@ -117,6 +118,7 @@ Mock mode:
 - Simulates HubSpot contact create/update behavior
 - Simulates Wix contact create/update behavior
 - Keeps OAuth tokens out of the browser by design
+- Does not return the webhook key from the API; reviewers enter the local demo key in the dashboard
 - Uses local demo IDs in the dashboard so repeated clicks demonstrate update flows
 
 Production mode:
@@ -229,6 +231,7 @@ HubSpot side:
 - Logs should never include raw tokens or unnecessary PII.
 - Webhook endpoints should validate signatures and require tenant/site authorization.
 - Demo webhook endpoints require `x-webhook-api-key` or `Authorization: Bearer <key>`.
+- Dashboard mutation routes also require the demo key, and `/api/state` redacts common contact PII.
 - Set `WEBHOOK_API_KEY` in the environment before deploying.
 - OAuth scopes should be limited to contacts/properties access needed by this integration.
 
@@ -248,6 +251,9 @@ POST /api/forms/wix-submission
 Protected routes:
 
 ```text
+POST /api/auth/hubspot/connect
+POST /api/auth/hubspot/disconnect
+POST /api/mappings
 POST /api/sync/wix-contact
 POST /api/sync/hubspot-contact
 POST /api/forms/wix-submission

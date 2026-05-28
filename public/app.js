@@ -1,12 +1,13 @@
 const state = {
   mappings: [],
-  demoWebhookApiKey: ""
+  apiKey: localStorage.getItem("wixHubspotDemoApiKey") || ""
 };
 
 const mappingRows = document.querySelector("#mappingRows");
 const connectionBadge = document.querySelector("#connectionBadge");
 const logs = document.querySelector("#logs");
 const modeValue = document.querySelector("#modeValue");
+const apiKeyInput = document.querySelector("#apiKeyInput");
 
 const directionOptions = [
   ["bidirectional", "Bi-directional"],
@@ -28,14 +29,12 @@ const demoIds = {
 };
 
 async function api(path, options = {}) {
-  const protectedRoute =
-    path === "/api/sync/wix-contact" ||
-    path === "/api/sync/hubspot-contact" ||
-    path === "/api/forms/wix-submission";
+  const method = options.method || "GET";
+  const protectedRoute = method !== "GET";
   const response = await fetch(path, {
     headers: {
       "content-type": "application/json",
-      ...(protectedRoute ? { "x-webhook-api-key": state.demoWebhookApiKey } : {}),
+      ...(protectedRoute ? { "x-webhook-api-key": state.apiKey } : {}),
       ...(options.headers || {})
     },
     ...options
@@ -55,13 +54,22 @@ function optionList(options, selected) {
     .join("");
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 function renderMappings() {
   mappingRows.innerHTML = state.mappings
     .map(
       (mapping, index) => `
         <tr data-index="${index}">
-          <td><input data-field="wixField" value="${mapping.wixField || ""}" /></td>
-          <td><input data-field="hubspotProperty" value="${mapping.hubspotProperty || ""}" /></td>
+          <td><input data-field="wixField" value="${escapeHtml(mapping.wixField)}" /></td>
+          <td><input data-field="hubspotProperty" value="${escapeHtml(mapping.hubspotProperty)}" /></td>
           <td><select data-field="direction">${optionList(directionOptions, mapping.direction)}</select></td>
           <td><select data-field="transform">${optionList(transformOptions, mapping.transform)}</select></td>
           <td><button class="secondary" data-delete="${index}" type="button">Remove</button></td>
@@ -91,9 +99,9 @@ function renderLogs(events) {
       .map(
         (event) => `
           <div class="logItem ${event.status === "skipped" ? "skipped" : ""}">
-            <strong>${event.message}</strong>
-            <span>${event.createdAt} | status: ${event.status} | source: ${event.source} | syncId: ${event.syncId}</span>
-            <code>${JSON.stringify(event.details || {}, null, 2)}</code>
+            <strong>${escapeHtml(event.message)}</strong>
+            <span>${escapeHtml(event.createdAt)} | status: ${escapeHtml(event.status)} | source: ${escapeHtml(event.source)} | syncId: ${escapeHtml(event.syncId)}</span>
+            <code>${escapeHtml(JSON.stringify(event.details || {}, null, 2))}</code>
           </div>
         `
       )
@@ -103,7 +111,6 @@ function renderLogs(events) {
 async function refresh() {
   const data = await api("/api/state");
   state.mappings = data.mappings;
-  state.demoWebhookApiKey = data.demoWebhookApiKey;
   connectionBadge.textContent = data.connection.connected
     ? `Connected (${data.connection.mode})`
     : "Disconnected";
@@ -116,6 +123,12 @@ async function refresh() {
   renderMappings();
   renderLogs(data.syncEvents);
 }
+
+apiKeyInput.value = state.apiKey;
+apiKeyInput.addEventListener("input", (event) => {
+  state.apiKey = event.currentTarget.value;
+  localStorage.setItem("wixHubspotDemoApiKey", state.apiKey);
+});
 
 document.querySelector("#connectBtn").addEventListener("click", async () => {
   const result = await api("/api/auth/hubspot/connect", { method: "POST" });

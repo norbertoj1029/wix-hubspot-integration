@@ -141,6 +141,15 @@ p {
   font-size: 17px;
 }
 
+.inlineInput {
+  width: 100%;
+  min-height: 34px;
+  margin-top: 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 9px;
+}
+
 .stepLabel {
   margin-bottom: 6px;
 }
