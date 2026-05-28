@@ -1,6 +1,6 @@
 node_modules/
 .env
-*.pdf
+App Market - Full Stack Assignment - Google Docs.pdf
 data/*.json
 !.gitkeep
 dist/

@@ -68,6 +68,13 @@ The dashboard is a self-hosted stand-in for the Wix App Dashboard surface. In pr
 
 ## Run Locally
 
+Requirements:
+
+```text
+Node.js 20+
+npm 10+
+```
+
 ```bash
 npm run dev
 ```
