@@ -1,8 +1,12 @@
 import crypto from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import http from "node:http";
+import { defaultMappings } from "./config/defaultMappings.js";
+import { createJsonStore } from "./storage/jsonStore.js";
+import { id, now } from "./lib/time.js";
+import { logEvent, syncHubSpotContactToWix, syncWixContactToHubSpot } from "./services/syncService.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, "..");
@@ -19,65 +23,6 @@ const protectedRoutes = new Set([
   "/api/sync/hubspot-contact",
   "/api/forms/wix-submission"
 ]);
-
-const defaultMappings = [
-  {
-    id: "map_email",
-    wixField: "email",
-    hubspotProperty: "email",
-    direction: "bidirectional",
-    transform: "lowercase"
-  },
-  {
-    id: "map_first_name",
-    wixField: "firstName",
-    hubspotProperty: "firstname",
-    direction: "bidirectional",
-    transform: "trim"
-  },
-  {
-    id: "map_last_name",
-    wixField: "lastName",
-    hubspotProperty: "lastname",
-    direction: "bidirectional",
-    transform: "trim"
-  },
-  {
-    id: "map_phone",
-    wixField: "phone",
-    hubspotProperty: "phone",
-    direction: "wix-to-hubspot",
-    transform: "trim"
-  },
-  {
-    id: "map_utm_source",
-    wixField: "utm_source",
-    hubspotProperty: "wix_utm_source",
-    direction: "wix-to-hubspot",
-    transform: "trim"
-  },
-  {
-    id: "map_utm_campaign",
-    wixField: "utm_campaign",
-    hubspotProperty: "wix_utm_campaign",
-    direction: "wix-to-hubspot",
-    transform: "trim"
-  },
-  {
-    id: "map_page_url",
-    wixField: "pageUrl",
-    hubspotProperty: "wix_page_url",
-    direction: "wix-to-hubspot",
-    transform: "trim"
-  },
-  {
-    id: "map_referrer",
-    wixField: "referrer",
-    hubspotProperty: "wix_referrer",
-    direction: "wix-to-hubspot",
-    transform: "trim"
-  }
-];
 
 function initialDb() {
   return {
@@ -97,19 +42,7 @@ function initialDb() {
   };
 }
 
-function ensureDb() {
-  if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
-  if (!existsSync(dbPath)) writeFileSync(dbPath, JSON.stringify(initialDb(), null, 2));
-}
-
-function readDb() {
-  ensureDb();
-  return JSON.parse(readFileSync(dbPath, "utf8"));
-}
-
-function writeDb(db) {
-  writeFileSync(dbPath, JSON.stringify(db, null, 2));
-}
+const store = createJsonStore(dbPath, initialDb);
 
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
@@ -154,196 +87,6 @@ function readBody(req) {
   });
 }
 
-function id(prefix) {
-  return `${prefix}_${crypto.randomUUID()}`;
-}
-
-function now() {
-  return new Date().toISOString();
-}
-
-function applyTransform(value, transform) {
-  if (value === undefined || value === null) return value;
-  const stringValue = String(value);
-  if (transform === "lowercase") return stringValue.trim().toLowerCase();
-  if (transform === "uppercase") return stringValue.trim().toUpperCase();
-  if (transform === "trim") return stringValue.trim();
-  return value;
-}
-
-function allowedByDirection(mapping, direction) {
-  return mapping.direction === "bidirectional" || mapping.direction === direction;
-}
-
-function mapFields(input, mappings, direction) {
-  return mappings
-    .filter((mapping) => allowedByDirection(mapping, direction))
-    .reduce((output, mapping) => {
-      if (Object.prototype.hasOwnProperty.call(input, mapping.wixField)) {
-        output[mapping.hubspotProperty] = applyTransform(input[mapping.wixField], mapping.transform);
-      }
-      return output;
-    }, {});
-}
-
-function reverseMapFields(input, mappings) {
-  return mappings
-    .filter((mapping) => allowedByDirection(mapping, "hubspot-to-wix"))
-    .reduce((output, mapping) => {
-      if (Object.prototype.hasOwnProperty.call(input, mapping.hubspotProperty)) {
-        output[mapping.wixField] = applyTransform(input[mapping.hubspotProperty], mapping.transform);
-      }
-      return output;
-    }, {});
-}
-
-function logEvent(db, event) {
-  const entry = {
-    id: id("sync"),
-    createdAt: now(),
-    status: "success",
-    ...event
-  };
-  db.syncEvents.unshift(entry);
-  db.syncEvents = db.syncEvents.slice(0, 100);
-  return entry;
-}
-
-function samePayload(left, right) {
-  return JSON.stringify(left || {}) === JSON.stringify(right || {});
-}
-
-function upsertMockHubSpotContact(db, properties, existingHubSpotId) {
-  const byId = existingHubSpotId
-    ? db.mockHubSpotContacts.find((contact) => contact.id === existingHubSpotId)
-    : null;
-  const byEmail = properties.email
-    ? db.mockHubSpotContacts.find((contact) => contact.properties.email === properties.email)
-    : null;
-  const contact = byId || byEmail;
-
-  if (contact) {
-    if (!samePayload(contact.properties, { ...contact.properties, ...properties })) {
-      contact.properties = { ...contact.properties, ...properties };
-      contact.updatedAt = now();
-    }
-    return { contact, action: "updated" };
-  }
-
-  const created = {
-    id: id("hs"),
-    properties,
-    createdAt: now(),
-    updatedAt: now()
-  };
-  db.mockHubSpotContacts.push(created);
-  return { contact: created, action: "created" };
-}
-
-function upsertMockWixContact(db, fields, existingWixId) {
-  const byId = existingWixId ? db.mockWixContacts.find((contact) => contact.id === existingWixId) : null;
-  const byEmail = fields.email ? db.mockWixContacts.find((contact) => contact.fields.email === fields.email) : null;
-  const contact = byId || byEmail;
-
-  if (contact) {
-    contact.fields = { ...contact.fields, ...fields };
-    contact.updatedAt = now();
-    return { contact, action: "updated" };
-  }
-
-  const created = {
-    id: id("wix"),
-    fields,
-    createdAt: now(),
-    updatedAt: now()
-  };
-  db.mockWixContacts.push(created);
-  return { contact: created, action: "created" };
-}
-
-function findContactMapping(db, { wixContactId, hubspotContactId }) {
-  return db.contactMappings.find((mapping) => {
-    return (
-      (wixContactId && mapping.wixContactId === wixContactId) ||
-      (hubspotContactId && mapping.hubspotContactId === hubspotContactId)
-    );
-  });
-}
-
-function saveContactMapping(db, { wixContactId, hubspotContactId, syncId }) {
-  const existing = findContactMapping(db, { wixContactId, hubspotContactId });
-  if (existing) {
-    existing.wixContactId = wixContactId || existing.wixContactId;
-    existing.hubspotContactId = hubspotContactId || existing.hubspotContactId;
-    existing.lastSyncId = syncId;
-    existing.updatedAt = now();
-    return existing;
-  }
-
-  const mapping = {
-    id: id("contact_map"),
-    wixContactId,
-    hubspotContactId,
-    lastSyncId: syncId,
-    createdAt: now(),
-    updatedAt: now()
-  };
-  db.contactMappings.push(mapping);
-  return mapping;
-}
-
-function syncWixContactToHubSpot(db, payload) {
-  const syncId = payload.syncId || id("corr");
-  const wixContactId = payload.wixContactId || id("wix");
-  const mapping = findContactMapping(db, { wixContactId });
-
-  if (mapping?.lastSyncId === syncId) {
-    return logEvent(db, {
-      source: "wix",
-      syncId,
-      message: "Ignored duplicate Wix event with same syncId.",
-      details: { wixContactId, hubspotContactId: mapping.hubspotContactId }
-    });
-  }
-
-  const properties = mapFields(payload.fields || payload, db.mappings, "wix-to-hubspot");
-  const { contact, action } = upsertMockHubSpotContact(db, properties, mapping?.hubspotContactId);
-  saveContactMapping(db, { wixContactId, hubspotContactId: contact.id, syncId });
-
-  return logEvent(db, {
-    source: "wix",
-    syncId,
-    message: `Wix contact ${action} HubSpot contact.`,
-    details: { wixContactId, hubspotContactId: contact.id, properties }
-  });
-}
-
-function syncHubSpotContactToWix(db, payload) {
-  const syncId = payload.syncId || id("corr");
-  const hubspotContactId = payload.hubspotContactId || id("hs");
-  const mapping = findContactMapping(db, { hubspotContactId });
-
-  if (mapping?.lastSyncId === syncId) {
-    return logEvent(db, {
-      source: "hubspot",
-      syncId,
-      message: "Ignored duplicate HubSpot event with same syncId.",
-      details: { wixContactId: mapping.wixContactId, hubspotContactId }
-    });
-  }
-
-  const fields = reverseMapFields(payload.properties || payload, db.mappings);
-  const { contact, action } = upsertMockWixContact(db, fields, mapping?.wixContactId);
-  saveContactMapping(db, { wixContactId: contact.id, hubspotContactId, syncId });
-
-  return logEvent(db, {
-    source: "hubspot",
-    syncId,
-    message: `HubSpot contact ${action} Wix contact.`,
-    details: { wixContactId: contact.id, hubspotContactId, fields }
-  });
-}
-
 function serveStatic(req, res) {
   const url = new URL(req.url, appBaseUrl);
   const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
@@ -368,7 +111,7 @@ function serveStatic(req, res) {
 
 async function routeApi(req, res) {
   const url = new URL(req.url, appBaseUrl);
-  const db = readDb();
+  const db = store.read();
 
   if (protectedRoutes.has(url.pathname) && !isAuthorizedWebhook(req)) {
     return sendJson(res, 401, { error: "Missing or invalid webhook API key." });
@@ -414,7 +157,7 @@ async function routeApi(req, res) {
       message: "Connected HubSpot in mock mode.",
       details: { tokenStorage: "server-only placeholder" }
     });
-    writeDb(db);
+    store.write(db);
     return sendJson(res, 200, { connected: true, mode: "mock" });
   }
 
@@ -432,7 +175,7 @@ async function routeApi(req, res) {
       message: "Received HubSpot OAuth callback. Token exchange is documented for production setup.",
       details: { codeReceived: Boolean(url.searchParams.get("code")) }
     });
-    writeDb(db);
+    store.write(db);
     res.writeHead(302, { location: "/" });
     return res.end();
   }
@@ -451,7 +194,7 @@ async function routeApi(req, res) {
       message: "Disconnected HubSpot and cleared active connection state.",
       details: {}
     });
-    writeDb(db);
+    store.write(db);
     return sendJson(res, 200, { connected: false });
   }
 
@@ -481,21 +224,21 @@ async function routeApi(req, res) {
       message: "Saved field mappings.",
       details: { count: db.mappings.length }
     });
-    writeDb(db);
+    store.write(db);
     return sendJson(res, 200, { mappings: db.mappings });
   }
 
   if (req.method === "POST" && url.pathname === "/api/sync/wix-contact") {
     const body = await readBody(req);
     const event = syncWixContactToHubSpot(db, body);
-    writeDb(db);
+    store.write(db);
     return sendJson(res, 200, { event });
   }
 
   if (req.method === "POST" && url.pathname === "/api/sync/hubspot-contact") {
     const body = await readBody(req);
     const event = syncHubSpotContactToWix(db, body);
-    writeDb(db);
+    store.write(db);
     return sendJson(res, 200, { event });
   }
 
@@ -528,7 +271,7 @@ async function routeApi(req, res) {
       }
     });
     event.message = "Captured Wix form submission and synced lead to HubSpot.";
-    writeDb(db);
+    store.write(db);
     return sendJson(res, 200, { submission, event });
   }
 
