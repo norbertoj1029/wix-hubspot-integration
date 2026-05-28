@@ -244,6 +244,19 @@ async function routeApi(req, res) {
 
   if (req.method === "POST" && url.pathname === "/api/forms/wix-submission") {
     const body = await readBody(req);
+    const attributionFields = {
+      utm_source: body.utm_source,
+      utm_medium: body.utm_medium,
+      utm_campaign: body.utm_campaign,
+      utm_term: body.utm_term,
+      utm_content: body.utm_content,
+      pageUrl: body.pageUrl,
+      referrer: body.referrer
+    };
+    const submissionFields = {
+      ...(body.fields || body),
+      ...Object.fromEntries(Object.entries(attributionFields).filter(([, value]) => value !== undefined))
+    };
     const submission = {
       id: id("form"),
       createdAt: now(),
@@ -257,18 +270,15 @@ async function routeApi(req, res) {
         term: body.utm_term,
         content: body.utm_content
       },
-      fields: body.fields || body
+      fields: submissionFields
     };
     db.formSubmissions.unshift(submission);
     db.formSubmissions = db.formSubmissions.slice(0, 50);
     const event = syncWixContactToHubSpot(db, {
       wixContactId: body.wixContactId,
       syncId: body.syncId,
-      fields: {
-        ...(body.fields || body),
-        pageUrl: body.pageUrl,
-        referrer: body.referrer
-      }
+      updatedAt: body.updatedAt,
+      fields: submissionFields
     });
     event.message = "Captured Wix form submission and synced lead to HubSpot.";
     store.write(db);

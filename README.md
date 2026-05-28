@@ -4,6 +4,21 @@ Self-hosted full-stack prototype for a Wix App Market style integration that syn
 
 The demo intentionally avoids Wix Editor setup. It exposes webhook-style endpoints for Wix events and includes dashboard controls that simulate Wix contact updates and form submissions locally.
 
+## Submission
+
+Repository:
+
+```text
+https://github.com/karasdev/wix-hubspot-integration
+```
+
+Reviewer access:
+
+```text
+No external Wix or HubSpot credentials are required for the local demo.
+The app runs in mock mode by default and includes dashboard buttons to test each flow.
+```
+
 ## Architecture
 
 ```text
@@ -50,7 +65,6 @@ src/storage/jsonStore.js
 ## Run Locally
 
 ```bash
-npm install
 npm run dev
 ```
 
@@ -60,16 +74,25 @@ Open:
 http://localhost:3000
 ```
 
-This project currently uses only built-in Node.js modules, so it can also run without installing packages:
-
-```bash
-npm run dev
-```
+This project currently uses only built-in Node.js modules, so `npm install` is not required.
 
 Optional local environment:
 
 ```bash
 cp .env.example .env
+```
+
+The npm scripts load `.env` automatically when the file exists.
+
+Quick demo path:
+
+```text
+1. Open http://localhost:3000
+2. Click Connect HubSpot
+3. Click Sync Wix to HubSpot twice to see create/update behavior on the same demo contact
+4. Click Sync HubSpot to Wix twice to see create/update behavior on the same demo contact
+5. Click Capture Lead
+6. Review Sync Activity and Demo Records
 ```
 
 Environment variables:
@@ -94,6 +117,7 @@ Mock mode:
 - Simulates HubSpot contact create/update behavior
 - Simulates Wix contact create/update behavior
 - Keeps OAuth tokens out of the browser by design
+- Uses local demo IDs in the dashboard so repeated clicks demonstrate update flows
 
 Production mode:
 

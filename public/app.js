@@ -21,6 +21,12 @@ const transformOptions = [
   ["uppercase", "Uppercase"]
 ];
 
+const demoIds = {
+  wixContactId: "wix_dashboard_demo_contact",
+  hubspotContactId: "hs_dashboard_demo_contact",
+  formContactId: "wix_dashboard_form_lead"
+};
+
 async function api(path, options = {}) {
   const protectedRoute =
     path === "/api/sync/wix-contact" ||
@@ -151,7 +157,11 @@ document.querySelector("#wixContactForm").addEventListener("submit", async (even
   event.preventDefault();
   await api("/api/sync/wix-contact", {
     method: "POST",
-    body: JSON.stringify({ fields: formToObject(event.currentTarget) })
+    body: JSON.stringify({
+      wixContactId: demoIds.wixContactId,
+      updatedAt: new Date().toISOString(),
+      fields: formToObject(event.currentTarget)
+    })
   });
   await refresh();
 });
@@ -160,7 +170,11 @@ document.querySelector("#hubspotContactForm").addEventListener("submit", async (
   event.preventDefault();
   await api("/api/sync/hubspot-contact", {
     method: "POST",
-    body: JSON.stringify({ properties: formToObject(event.currentTarget) })
+    body: JSON.stringify({
+      hubspotContactId: demoIds.hubspotContactId,
+      updatedAt: new Date().toISOString(),
+      properties: formToObject(event.currentTarget)
+    })
   });
   await refresh();
 });
@@ -172,6 +186,8 @@ document.querySelector("#formSubmissionForm").addEventListener("submit", async (
     method: "POST",
     body: JSON.stringify({
       ...data,
+      wixContactId: demoIds.formContactId,
+      updatedAt: new Date().toISOString(),
       pageUrl: "https://demo-wix-site.example/contact",
       referrer: "https://google.com",
       fields: {

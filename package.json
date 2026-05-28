@@ -5,8 +5,8 @@
   "description": "Self-hosted Wix to HubSpot integration prototype for bidirectional contact sync and lead capture.",
   "type": "module",
   "scripts": {
-    "dev": "node src/server.js",
-    "start": "node src/server.js"
+    "dev": "node --env-file-if-exists=.env src/server.js",
+    "start": "node --env-file-if-exists=.env src/server.js"
   },
   "engines": {
     "node": ">=20"
