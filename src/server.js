@@ -146,7 +146,7 @@ async function routeApi(req, res) {
       connection: db.connection,
       mappings: db.mappings,
       contactMappings: db.contactMappings,
-      syncEvents: db.syncEvents,
+      syncEvents: redactSensitive(db.syncEvents),
       formSubmissions: redactSensitive(db.formSubmissions),
       mockHubSpotContacts: redactSensitive(db.mockHubSpotContacts),
       mockWixContacts: redactSensitive(db.mockWixContacts)
