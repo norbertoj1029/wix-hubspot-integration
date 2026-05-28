@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wix HubSpot Integration</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="topbar">
+        <div>
+          <p class="eyebrow">Self-hosted app prototype</p>
+          <h1>Wix HubSpot Integration</h1>
+        </div>
+        <div class="connection">
+          <span id="connectionBadge" class="badge">Loading</span>
+          <button id="connectBtn">Connect HubSpot</button>
+          <button id="disconnectBtn" class="secondary">Disconnect</button>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="panel wide">
+          <div class="panelHeader">
+            <div>
+              <h2>Field Mapping</h2>
+              <p>Saved rules used by both contact sync directions.</p>
+            </div>
+            <div class="actions">
+              <button id="addMappingBtn" class="secondary">Add row</button>
+              <button id="saveMappingsBtn">Save mapping</button>
+            </div>
+          </div>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Wix field</th>
+                  <th>HubSpot property</th>
+                  <th>Direction</th>
+                  <th>Transform</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="mappingRows"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel">
+          <h2>Simulate Wix Contact</h2>
+          <form id="wixContactForm" class="stack">
+            <label>Email <input name="email" value="maria@example.com" /></label>
+            <label>First name <input name="firstName" value="Maria" /></label>
+            <label>Last name <input name="lastName" value="Santos" /></label>
+            <label>Phone <input name="phone" value="+1 555 0100" /></label>
+            <button type="submit">Sync Wix to HubSpot</button>
+          </form>
+        </article>
+
+        <article class="panel">
+          <h2>Simulate HubSpot Contact</h2>
+          <form id="hubspotContactForm" class="stack">
+            <label>Email <input name="email" value="alex@example.com" /></label>
+            <label>Firstname <input name="firstname" value="Alex" /></label>
+            <label>Lastname <input name="lastname" value="Rivera" /></label>
+            <label>Phone <input name="phone" value="+1 555 0188" /></label>
+            <button type="submit">Sync HubSpot to Wix</button>
+          </form>
+        </article>
+
+        <article class="panel">
+          <h2>Wix Form Lead Capture</h2>
+          <form id="formSubmissionForm" class="stack">
+            <label>Email <input name="email" value="lead@example.com" /></label>
+            <label>First name <input name="firstName" value="Jordan" /></label>
+            <label>UTM source <input name="utm_source" value="google" /></label>
+            <label>UTM campaign <input name="utm_campaign" value="spring_launch" /></label>
+            <button type="submit">Capture Lead</button>
+          </form>
+        </article>
+
+        <article class="panel">
+          <h2>Mock Records</h2>
+          <div class="metricGrid">
+            <div><strong id="hubspotCount">0</strong><span>HubSpot contacts</span></div>
+            <div><strong id="wixCount">0</strong><span>Wix contacts</span></div>
+            <div><strong id="mappingCount">0</strong><span>ID mappings</span></div>
+            <div><strong id="formCount">0</strong><span>Form submissions</span></div>
+          </div>
+        </article>
+
+        <article class="panel wide">
+          <div class="panelHeader">
+            <div>
+              <h2>Sync Activity</h2>
+              <p>Recent events show source, correlation ID, and loop-prevention behavior.</p>
+            </div>
+          </div>
+          <div id="logs" class="logs"></div>
+        </article>
+      </section>
+    </main>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
