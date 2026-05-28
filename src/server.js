@@ -12,7 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, "..");
 const publicDir = join(rootDir, "public");
 const dataDir = join(rootDir, "data");
-const dbPath = join(dataDir, "app-db.json");
+const defaultDbPath = join(dataDir, "app-db.json");
 
 const port = Number(process.env.PORT || 3000);
 const appBaseUrl = process.env.APP_BASE_URL || `http://localhost:${port}`;
@@ -27,11 +27,11 @@ const protectedRoutes = new Set([
   "/api/forms/wix-submission"
 ]);
 
-function initialDb() {
+function initialDb(mode = hubspotMode) {
   return {
     connection: {
       connected: false,
-      mode: hubspotMode,
+      mode,
       portalId: null,
       connectedAt: null,
       disconnectedAt: null
@@ -45,8 +45,6 @@ function initialDb() {
   };
 }
 
-const store = createJsonStore(dbPath, initialDb);
-
 function sendJson(res, status, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(status, {
@@ -56,17 +54,43 @@ function sendJson(res, status, payload) {
   res.end(body);
 }
 
+function hasValue(value) {
+  return value !== undefined && value !== null && String(value).trim() !== "";
+}
+
+function validateMappingsPayload(body) {
+  if (!Array.isArray(body.mappings) || body.mappings.length === 0) {
+    return "Request body must include at least one mapping.";
+  }
+  return null;
+}
+
+function validateWixContactPayload(body) {
+  if (hasValue(body.wixContactId) || hasValue(body.fields?.email)) return null;
+  return "Wix contact sync requires wixContactId or fields.email.";
+}
+
+function validateHubSpotContactPayload(body) {
+  if (hasValue(body.hubspotContactId) || hasValue(body.properties?.email)) return null;
+  return "HubSpot contact sync requires hubspotContactId or properties.email.";
+}
+
+function validateWixFormPayload(body) {
+  if (hasValue(body.fields?.email) || hasValue(body.email)) return null;
+  return "Wix form submission requires fields.email or email.";
+}
+
 function timingSafeEqual(left, right) {
   const leftBuffer = Buffer.from(left || "");
   const rightBuffer = Buffer.from(right || "");
   return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-function isAuthorizedWebhook(req) {
+function isAuthorizedWebhook(req, apiKey = webhookApiKey) {
   const headerKey = req.headers["x-webhook-api-key"];
   const authHeader = req.headers.authorization || "";
   const bearerKey = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
-  return timingSafeEqual(headerKey, webhookApiKey) || timingSafeEqual(bearerKey, webhookApiKey);
+  return timingSafeEqual(headerKey, apiKey) || timingSafeEqual(bearerKey, apiKey);
 }
 
 const sensitiveKeys = new Set([
@@ -111,8 +135,8 @@ function readBody(req) {
   });
 }
 
-function serveStatic(req, res) {
-  const url = new URL(req.url, appBaseUrl);
+function serveStatic(req, res, baseUrl = appBaseUrl) {
+  const url = new URL(req.url, baseUrl);
   const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
   const safePath = pathname.replaceAll("..", "");
   const filePath = join(publicDir, safePath);
@@ -133,11 +157,11 @@ function serveStatic(req, res) {
   }
 }
 
-async function routeApi(req, res) {
-  const url = new URL(req.url, appBaseUrl);
+async function routeApi(req, res, { store, baseUrl, mode, apiKey }) {
+  const url = new URL(req.url, baseUrl);
   const db = store.read();
 
-  if (protectedRoutes.has(url.pathname) && !isAuthorizedWebhook(req)) {
+  if (protectedRoutes.has(url.pathname) && !isAuthorizedWebhook(req, apiKey)) {
     return sendJson(res, 401, { error: "Missing or invalid webhook API key." });
   }
 
@@ -154,10 +178,10 @@ async function routeApi(req, res) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/auth/hubspot/connect") {
-    if (hubspotMode === "real" && process.env.HUBSPOT_CLIENT_ID) {
+    if (mode === "real" && process.env.HUBSPOT_CLIENT_ID) {
       const params = new URLSearchParams({
         client_id: process.env.HUBSPOT_CLIENT_ID,
-        redirect_uri: process.env.HUBSPOT_REDIRECT_URI || `${appBaseUrl}/api/auth/hubspot/callback`,
+        redirect_uri: process.env.HUBSPOT_REDIRECT_URI || `${baseUrl}/api/auth/hubspot/callback`,
         scope: "crm.objects.contacts.read crm.objects.contacts.write crm.schemas.contacts.read",
         response_type: "code"
       });
@@ -187,7 +211,7 @@ async function routeApi(req, res) {
   if (req.method === "GET" && url.pathname === "/api/auth/hubspot/callback") {
     db.connection = {
       connected: true,
-      mode: hubspotMode,
+      mode,
       portalId: "pending-token-exchange",
       connectedAt: now(),
       disconnectedAt: null
@@ -206,7 +230,7 @@ async function routeApi(req, res) {
   if (req.method === "POST" && url.pathname === "/api/auth/hubspot/disconnect") {
     db.connection = {
       connected: false,
-      mode: hubspotMode,
+      mode,
       portalId: null,
       connectedAt: db.connection.connectedAt,
       disconnectedAt: now()
@@ -223,6 +247,9 @@ async function routeApi(req, res) {
 
   if (req.method === "POST" && url.pathname === "/api/mappings") {
     const body = await readBody(req);
+    const validationError = validateMappingsPayload(body);
+    if (validationError) return sendJson(res, 400, { error: validationError });
+
     const hubspotProperties = new Set();
     for (const mapping of body.mappings || []) {
       if (!mapping.wixField || !mapping.hubspotProperty) {
@@ -253,6 +280,9 @@ async function routeApi(req, res) {
 
   if (req.method === "POST" && url.pathname === "/api/sync/wix-contact") {
     const body = await readBody(req);
+    const validationError = validateWixContactPayload(body);
+    if (validationError) return sendJson(res, 400, { error: validationError });
+
     const event = syncWixContactToHubSpot(db, body);
     store.write(db);
     return sendJson(res, 200, { event: redactSensitive(event) });
@@ -260,6 +290,9 @@ async function routeApi(req, res) {
 
   if (req.method === "POST" && url.pathname === "/api/sync/hubspot-contact") {
     const body = await readBody(req);
+    const validationError = validateHubSpotContactPayload(body);
+    if (validationError) return sendJson(res, 400, { error: validationError });
+
     const event = syncHubSpotContactToWix(db, body);
     store.write(db);
     return sendJson(res, 200, { event: redactSensitive(event) });
@@ -267,6 +300,9 @@ async function routeApi(req, res) {
 
   if (req.method === "POST" && url.pathname === "/api/forms/wix-submission") {
     const body = await readBody(req);
+    const validationError = validateWixFormPayload(body);
+    if (validationError) return sendJson(res, 400, { error: validationError });
+
     const attributionFields = {
       utm_source: body.utm_source,
       utm_medium: body.utm_medium,
@@ -311,15 +347,33 @@ async function routeApi(req, res) {
   return sendJson(res, 404, { error: "API route not found" });
 }
 
-const server = http.createServer(async (req, res) => {
-  try {
-    if (req.url.startsWith("/api/")) return await routeApi(req, res);
-    return serveStatic(req, res);
-  } catch (error) {
-    return sendJson(res, 500, { error: error.message || "Unexpected server error" });
-  }
-});
+export function createRequestHandler(options = {}) {
+  const serverPort = Number(options.port || port);
+  const mode = options.hubspotMode || hubspotMode;
+  const baseUrl = options.appBaseUrl || `http://localhost:${serverPort}`;
+  const store = createJsonStore(options.dbPath || process.env.DB_PATH || defaultDbPath, () => initialDb(mode));
+  const apiKey = options.webhookApiKey || webhookApiKey;
 
-server.listen(port, () => {
-  console.log(`Wix HubSpot integration running at ${appBaseUrl}`);
-});
+  return async function handleRequest(req, res) {
+    try {
+      if (req.url.startsWith("/api/")) return await routeApi(req, res, { store, baseUrl, mode, apiKey });
+      return serveStatic(req, res, baseUrl);
+    } catch (error) {
+      const status = error.message === "Invalid JSON body" || error.message === "Request body too large" ? 400 : 500;
+      return sendJson(res, status, { error: error.message || "Unexpected server error" });
+    }
+  };
+}
+
+export function createServer(options = {}) {
+  return http.createServer(createRequestHandler(options));
+}
+
+const isEntrypoint = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+
+if (isEntrypoint) {
+  const server = createServer({ port, appBaseUrl, hubspotMode, dbPath: process.env.DB_PATH || defaultDbPath });
+  server.listen(port, () => {
+    console.log(`Wix HubSpot integration running at ${appBaseUrl}`);
+  });
+}

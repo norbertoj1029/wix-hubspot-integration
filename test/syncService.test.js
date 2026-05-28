@@ -71,6 +71,36 @@ test("self-produced HubSpot webhook is ignored by origin tag", () => {
   assert.equal(db.mockWixContacts.length, 0);
 });
 
+test("older processed syncIds are skipped even after a newer syncId", () => {
+  const db = createDb();
+
+  syncWixContactToHubSpot(db, {
+    wixContactId: "wix_replay",
+    syncId: "sync_001",
+    updatedAt: "2026-05-28T10:00:00.000Z",
+    fields: { email: "replay@example.com", firstName: "Original" }
+  });
+
+  syncWixContactToHubSpot(db, {
+    wixContactId: "wix_replay",
+    syncId: "sync_002",
+    updatedAt: "2026-05-28T10:05:00.000Z",
+    fields: { email: "replay@example.com", firstName: "Updated" }
+  });
+
+  const replayed = syncWixContactToHubSpot(db, {
+    wixContactId: "wix_replay",
+    syncId: "sync_001",
+    updatedAt: "2026-05-28T10:10:00.000Z",
+    fields: { email: "replay@example.com", firstName: "Replayed" }
+  });
+
+  assert.equal(replayed.status, "skipped");
+  assert.match(replayed.message, /duplicate Wix event/);
+  assert.deepEqual(db.contactMappings[0].processedSyncIds, ["sync_001", "sync_002"]);
+  assert.equal(db.mockHubSpotContacts[0].properties.firstname, "Updated");
+});
+
 test("UTM and page attribution fields map to HubSpot properties", () => {
   const db = createDb();
 

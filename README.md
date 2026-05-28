@@ -20,6 +20,13 @@ The app runs in mock mode by default and includes dashboard buttons to test each
 Default local demo key: dev-webhook-secret
 ```
 
+## Reviewer Checklist
+
+- Run command: `npm run dev`, then open `http://localhost:3000`.
+- Test command: `npm test`.
+- Implemented: protected webhook-style POST routes, configurable field mappings, bidirectional mock contact sync, Wix form lead capture, timestamp conflict handling, origin echo suppression, stale sync replay protection with recent `syncId` history, JSON persistence, redacted state output, and API/server integration tests.
+- Intentional mock limitations: no real HubSpot OAuth token exchange, no real Wix or HubSpot API clients, no provider webhook signature validation, no external queue, and local JSON storage only for review.
+
 ## Architecture
 
 ```text

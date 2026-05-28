@@ -4,6 +4,7 @@ import { id, now } from "../lib/time.js";
 import { mapHubSpotPropertiesToWix, mapWixFieldsToHubSpot } from "./fieldMapper.js";
 
 const APP_ORIGIN = "wix-hubspot-integration";
+const PROCESSED_SYNC_ID_LIMIT = 10;
 
 export function logEvent(db, event) {
   const entry = {
@@ -87,6 +88,9 @@ function saveContactMapping(db, { wixContactId, hubspotContactId, syncId, source
     existing.wixContactId = wixContactId || existing.wixContactId;
     existing.hubspotContactId = hubspotContactId || existing.hubspotContactId;
     existing.lastSyncId = syncId;
+    existing.processedSyncIds = [...new Set([...(existing.processedSyncIds || []), syncId])].slice(
+      -PROCESSED_SYNC_ID_LIMIT
+    );
     if (source === "wix") existing.lastWixUpdatedAt = sourceUpdatedAt;
     if (source === "hubspot") existing.lastHubSpotUpdatedAt = sourceUpdatedAt;
     existing.updatedAt = now();
@@ -98,6 +102,7 @@ function saveContactMapping(db, { wixContactId, hubspotContactId, syncId, source
     wixContactId,
     hubspotContactId,
     lastSyncId: syncId,
+    processedSyncIds: [syncId],
     lastWixUpdatedAt: source === "wix" ? sourceUpdatedAt : null,
     lastHubSpotUpdatedAt: source === "hubspot" ? sourceUpdatedAt : null,
     createdAt: now(),
@@ -123,10 +128,11 @@ export function syncWixContactToHubSpot(db, payload) {
     });
   }
 
-  if (mapping?.lastSyncId === syncId) {
+  if (mapping?.processedSyncIds?.includes(syncId) || mapping?.lastSyncId === syncId) {
     return logEvent(db, {
       source: "wix",
       syncId,
+      status: "skipped",
       message: "Ignored duplicate Wix event with same syncId.",
       details: { wixContactId, hubspotContactId: mapping.hubspotContactId }
     });
@@ -175,10 +181,11 @@ export function syncHubSpotContactToWix(db, payload) {
     });
   }
 
-  if (mapping?.lastSyncId === syncId) {
+  if (mapping?.processedSyncIds?.includes(syncId) || mapping?.lastSyncId === syncId) {
     return logEvent(db, {
       source: "hubspot",
       syncId,
+      status: "skipped",
       message: "Ignored duplicate HubSpot event with same syncId.",
       details: { wixContactId: mapping.wixContactId, hubspotContactId }
     });
