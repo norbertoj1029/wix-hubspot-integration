@@ -13,6 +13,12 @@ const dbPath = join(dataDir, "app-db.json");
 const port = Number(process.env.PORT || 3000);
 const appBaseUrl = process.env.APP_BASE_URL || `http://localhost:${port}`;
 const hubspotMode = process.env.HUBSPOT_MODE || "mock";
+const webhookApiKey = process.env.WEBHOOK_API_KEY || "dev-webhook-secret";
+const protectedRoutes = new Set([
+  "/api/sync/wix-contact",
+  "/api/sync/hubspot-contact",
+  "/api/forms/wix-submission"
+]);
 
 const defaultMappings = [
   {
@@ -112,6 +118,19 @@ function sendJson(res, status, payload) {
     "cache-control": "no-store"
   });
   res.end(body);
+}
+
+function timingSafeEqual(left, right) {
+  const leftBuffer = Buffer.from(left || "");
+  const rightBuffer = Buffer.from(right || "");
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function isAuthorizedWebhook(req) {
+  const headerKey = req.headers["x-webhook-api-key"];
+  const authHeader = req.headers.authorization || "";
+  const bearerKey = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
+  return timingSafeEqual(headerKey, webhookApiKey) || timingSafeEqual(bearerKey, webhookApiKey);
 }
 
 function readBody(req) {
@@ -351,6 +370,10 @@ async function routeApi(req, res) {
   const url = new URL(req.url, appBaseUrl);
   const db = readDb();
 
+  if (protectedRoutes.has(url.pathname) && !isAuthorizedWebhook(req)) {
+    return sendJson(res, 401, { error: "Missing or invalid webhook API key." });
+  }
+
   if (req.method === "GET" && url.pathname === "/api/state") {
     return sendJson(res, 200, {
       connection: db.connection,
@@ -359,7 +382,8 @@ async function routeApi(req, res) {
       syncEvents: db.syncEvents,
       formSubmissions: db.formSubmissions,
       mockHubSpotContacts: db.mockHubSpotContacts,
-      mockWixContacts: db.mockWixContacts
+      mockWixContacts: db.mockWixContacts,
+      demoWebhookApiKey: webhookApiKey
     });
   }
 

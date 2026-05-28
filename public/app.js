@@ -1,5 +1,6 @@
 const state = {
-  mappings: []
+  mappings: [],
+  demoWebhookApiKey: ""
 };
 
 const mappingRows = document.querySelector("#mappingRows");
@@ -20,8 +21,16 @@ const transformOptions = [
 ];
 
 async function api(path, options = {}) {
+  const protectedRoute =
+    path === "/api/sync/wix-contact" ||
+    path === "/api/sync/hubspot-contact" ||
+    path === "/api/forms/wix-submission";
   const response = await fetch(path, {
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(protectedRoute ? { "x-webhook-api-key": state.demoWebhookApiKey } : {}),
+      ...(options.headers || {})
+    },
     ...options
   });
   const data = await response.json();
@@ -87,6 +96,7 @@ function renderLogs(events) {
 async function refresh() {
   const data = await api("/api/state");
   state.mappings = data.mappings;
+  state.demoWebhookApiKey = data.demoWebhookApiKey;
   connectionBadge.textContent = data.connection.connected
     ? `Connected (${data.connection.mode})`
     : "Disconnected";

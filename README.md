@@ -14,6 +14,7 @@ The demo intentionally avoids Wix Editor setup. It exposes webhook-style endpoin
 - Default attribution mappings for `utm_source`, `utm_campaign`, `pageUrl`, and `referrer`
 - Contact ID mapping: `wixContactId <-> hubspotContactId`
 - Loop prevention using `syncId`, source tracking, and idempotent updates
+- API key protection for webhook-style sync endpoints
 - Sync activity log for observability
 
 ## Run Locally
@@ -33,6 +34,12 @@ This project currently uses only built-in Node.js modules, so it can also run wi
 
 ```bash
 npm run dev
+```
+
+Optional local environment:
+
+```bash
+cp .env.example .env
 ```
 
 ## API Plan
@@ -81,6 +88,8 @@ HubSpot side:
 - Production token storage should use a secret manager or encrypted database column.
 - Logs should never include raw tokens or unnecessary PII.
 - Webhook endpoints should validate signatures and require tenant/site authorization.
+- Demo webhook endpoints require `x-webhook-api-key` or `Authorization: Bearer <key>`.
+- Set `WEBHOOK_API_KEY` in the environment before deploying.
 - OAuth scopes should be limited to contacts/properties access needed by this integration.
 
 ## Important Endpoints
@@ -94,6 +103,20 @@ POST /api/mappings
 POST /api/sync/wix-contact
 POST /api/sync/hubspot-contact
 POST /api/forms/wix-submission
+```
+
+Protected routes:
+
+```text
+POST /api/sync/wix-contact
+POST /api/sync/hubspot-contact
+POST /api/forms/wix-submission
+```
+
+For local API testing, include:
+
+```text
+x-webhook-api-key: dev-webhook-secret
 ```
 
 ## Production Setup Notes
