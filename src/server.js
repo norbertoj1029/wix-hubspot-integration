@@ -76,7 +76,7 @@ const sensitiveKeys = new Set([
   "lastname",
   "lastName",
   "phone",
-  "message"
+  "company"
 ]);
 
 function redactSensitive(value) {
@@ -255,14 +255,14 @@ async function routeApi(req, res) {
     const body = await readBody(req);
     const event = syncWixContactToHubSpot(db, body);
     store.write(db);
-    return sendJson(res, 200, { event });
+    return sendJson(res, 200, { event: redactSensitive(event) });
   }
 
   if (req.method === "POST" && url.pathname === "/api/sync/hubspot-contact") {
     const body = await readBody(req);
     const event = syncHubSpotContactToWix(db, body);
     store.write(db);
-    return sendJson(res, 200, { event });
+    return sendJson(res, 200, { event: redactSensitive(event) });
   }
 
   if (req.method === "POST" && url.pathname === "/api/forms/wix-submission") {
@@ -305,7 +305,7 @@ async function routeApi(req, res) {
     });
     event.message = "Captured Wix form submission and synced lead to HubSpot.";
     store.write(db);
-    return sendJson(res, 200, { submission, event });
+    return sendJson(res, 200, { submission: redactSensitive(submission), event: redactSensitive(event) });
   }
 
   return sendJson(res, 404, { error: "API route not found" });

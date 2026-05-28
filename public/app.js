@@ -214,5 +214,5 @@ document.querySelector("#formSubmissionForm").addEventListener("submit", async (
 });
 
 refresh().catch((error) => {
-  logs.innerHTML = `<p>${error.message}</p>`;
+  logs.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
 });
