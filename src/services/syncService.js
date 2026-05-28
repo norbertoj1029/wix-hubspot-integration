@@ -1,5 +1,4 @@
-import { upsertMockHubSpotContact } from "../adapters/mockHubSpotAdapter.js";
-import { upsertMockWixContact } from "../adapters/mockWixAdapter.js";
+import { createAdapters } from "../adapters/index.js";
 import { id, now } from "../lib/time.js";
 import { mapHubSpotPropertiesToWix, mapWixFieldsToHubSpot } from "./fieldMapper.js";
 
@@ -82,6 +81,17 @@ function isStaleComparedToOppositeSource(mapping, source, sourceUpdatedAt) {
   return false;
 }
 
+function isStaleComparedToSameSource(mapping, source, sourceUpdatedAt) {
+  if (!mapping) return false;
+  if (source === "wix" && mapping.lastWixUpdatedAt) {
+    return !isAfter(sourceUpdatedAt, mapping.lastWixUpdatedAt);
+  }
+  if (source === "hubspot" && mapping.lastHubSpotUpdatedAt) {
+    return !isAfter(sourceUpdatedAt, mapping.lastHubSpotUpdatedAt);
+  }
+  return false;
+}
+
 function saveContactMapping(db, { wixContactId, hubspotContactId, syncId, source, sourceUpdatedAt }) {
   const existing = findContactMapping(db, { wixContactId, hubspotContactId });
   if (existing) {
@@ -112,7 +122,8 @@ function saveContactMapping(db, { wixContactId, hubspotContactId, syncId, source
   return mapping;
 }
 
-export function syncWixContactToHubSpot(db, payload) {
+export function syncWixContactToHubSpot(db, payload, options = {}) {
+  const adapters = options.adapters || createAdapters();
   const syncId = payload.syncId || id("corr");
   const wixContactId = payload.wixContactId || id("wix");
   const sourceUpdatedAt = getSourceUpdatedAt(payload, "wix");
@@ -138,6 +149,21 @@ export function syncWixContactToHubSpot(db, payload) {
     });
   }
 
+  if (isStaleComparedToSameSource(mapping, "wix", sourceUpdatedAt)) {
+    return logEvent(db, {
+      source: "wix",
+      syncId,
+      status: "skipped",
+      message: "Skipped stale Wix update because a newer Wix timestamp was already accepted.",
+      details: {
+        wixContactId,
+        hubspotContactId: mapping.hubspotContactId,
+        wixUpdatedAt: sourceUpdatedAt,
+        lastWixUpdatedAt: mapping.lastWixUpdatedAt
+      }
+    });
+  }
+
   if (isStaleComparedToOppositeSource(mapping, "wix", sourceUpdatedAt)) {
     return logEvent(db, {
       source: "wix",
@@ -154,7 +180,12 @@ export function syncWixContactToHubSpot(db, payload) {
   }
 
   const properties = mapWixFieldsToHubSpot(payload.fields || payload, db.mappings);
-  const { contact, action } = upsertMockHubSpotContact(db, properties, mapping?.hubspotContactId, sourceUpdatedAt);
+  const { contact, action } = adapters.hubspot.upsertContact(
+    db,
+    properties,
+    mapping?.hubspotContactId,
+    sourceUpdatedAt
+  );
   saveContactMapping(db, { wixContactId, hubspotContactId: contact.id, syncId, source: "wix", sourceUpdatedAt });
 
   return logEvent(db, {
@@ -165,7 +196,8 @@ export function syncWixContactToHubSpot(db, payload) {
   });
 }
 
-export function syncHubSpotContactToWix(db, payload) {
+export function syncHubSpotContactToWix(db, payload, options = {}) {
+  const adapters = options.adapters || createAdapters();
   const syncId = payload.syncId || id("corr");
   const hubspotContactId = payload.hubspotContactId || id("hs");
   const sourceUpdatedAt = getSourceUpdatedAt(payload, "hubspot");
@@ -191,6 +223,21 @@ export function syncHubSpotContactToWix(db, payload) {
     });
   }
 
+  if (isStaleComparedToSameSource(mapping, "hubspot", sourceUpdatedAt)) {
+    return logEvent(db, {
+      source: "hubspot",
+      syncId,
+      status: "skipped",
+      message: "Skipped stale HubSpot update because a newer HubSpot timestamp was already accepted.",
+      details: {
+        wixContactId: mapping.wixContactId,
+        hubspotContactId,
+        hubSpotUpdatedAt: sourceUpdatedAt,
+        lastHubSpotUpdatedAt: mapping.lastHubSpotUpdatedAt
+      }
+    });
+  }
+
   if (isStaleComparedToOppositeSource(mapping, "hubspot", sourceUpdatedAt)) {
     return logEvent(db, {
       source: "hubspot",
@@ -207,7 +254,7 @@ export function syncHubSpotContactToWix(db, payload) {
   }
 
   const fields = mapHubSpotPropertiesToWix(payload.properties || payload, db.mappings);
-  const { contact, action } = upsertMockWixContact(db, fields, mapping?.wixContactId, sourceUpdatedAt);
+  const { contact, action } = adapters.wix.upsertContact(db, fields, mapping?.wixContactId, sourceUpdatedAt);
   saveContactMapping(db, { wixContactId: contact.id, hubspotContactId, syncId, source: "hubspot", sourceUpdatedAt });
 
   return logEvent(db, {

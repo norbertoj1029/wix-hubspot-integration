@@ -101,6 +101,50 @@ test("older processed syncIds are skipped even after a newer syncId", () => {
   assert.equal(db.mockHubSpotContacts[0].properties.firstname, "Updated");
 });
 
+test("older Wix event with a different syncId cannot overwrite newer Wix data", () => {
+  const db = createDb();
+
+  syncWixContactToHubSpot(db, {
+    wixContactId: "wix_same_source",
+    syncId: "wix_newer",
+    updatedAt: "2026-05-28T10:10:00.000Z",
+    fields: { email: "same-wix@example.com", firstName: "Newer" }
+  });
+
+  const skipped = syncWixContactToHubSpot(db, {
+    wixContactId: "wix_same_source",
+    syncId: "wix_older_different",
+    updatedAt: "2026-05-28T10:00:00.000Z",
+    fields: { email: "same-wix@example.com", firstName: "Older" }
+  });
+
+  assert.equal(skipped.status, "skipped");
+  assert.match(skipped.message, /newer Wix timestamp/);
+  assert.equal(db.mockHubSpotContacts[0].properties.firstname, "Newer");
+});
+
+test("older HubSpot event with a different syncId cannot overwrite newer HubSpot data", () => {
+  const db = createDb();
+
+  syncHubSpotContactToWix(db, {
+    hubspotContactId: "hs_same_source",
+    syncId: "hs_newer",
+    updatedAt: "2026-05-28T10:10:00.000Z",
+    properties: { email: "same-hs@example.com", firstname: "Newer" }
+  });
+
+  const skipped = syncHubSpotContactToWix(db, {
+    hubspotContactId: "hs_same_source",
+    syncId: "hs_older_different",
+    updatedAt: "2026-05-28T10:00:00.000Z",
+    properties: { email: "same-hs@example.com", firstname: "Older" }
+  });
+
+  assert.equal(skipped.status, "skipped");
+  assert.match(skipped.message, /newer HubSpot timestamp/);
+  assert.equal(db.mockWixContacts[0].fields.firstName, "Newer");
+});
+
 test("UTM and page attribution fields map to HubSpot properties", () => {
   const db = createDb();
 

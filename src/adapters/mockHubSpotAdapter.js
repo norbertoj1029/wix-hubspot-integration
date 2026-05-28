@@ -30,3 +30,9 @@ export function upsertMockHubSpotContact(db, properties, existingHubSpotId, sour
   db.mockHubSpotContacts.push(created);
   return { contact: created, action: "created" };
 }
+
+export function createMockHubSpotAdapter() {
+  return {
+    upsertContact: upsertMockHubSpotContact
+  };
+}

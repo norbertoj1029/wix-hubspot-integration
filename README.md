@@ -24,8 +24,11 @@ Default local demo key: dev-webhook-secret
 
 - Run command: `npm run dev`, then open `http://localhost:3000`.
 - Test command: `npm test`.
-- Implemented: protected webhook-style POST routes, configurable field mappings, bidirectional mock contact sync, Wix form lead capture, timestamp conflict handling, origin echo suppression, stale sync replay protection with recent `syncId` history, JSON persistence, redacted state output, and API/server integration tests.
-- Intentional mock limitations: no real HubSpot OAuth token exchange, no real Wix or HubSpot API clients, no provider webhook signature validation, no external queue, and local JSON storage only for review.
+- Demo key: `dev-webhook-secret`.
+- Implemented features: protected webhook-style POST routes, configurable field mappings, bidirectional contact sync, Wix form lead capture, timestamp conflict handling, same-source stale event protection, origin echo suppression, recent `syncId` replay history, JSON persistence, redacted state output, mock/real adapter boundaries, and API/server integration tests.
+- Tested behaviors: API key rejection, mapping validation, invalid/oversized JSON handling, bad sync/form payload rejection, valid mapping persistence, valid form capture, duplicate `syncId` skipping, and stale same-source Wix/HubSpot replay skipping.
+- Intentional mock limitations: no real HubSpot OAuth token exchange, no active real Wix or HubSpot API calls, no provider webhook signature validation, no external queue, and local JSON storage only for review.
+- Production upgrade path: implement server-side HubSpot token exchange, encrypted token storage, real adapter API calls, Wix/HubSpot webhook signature validation, tenant/site authorization, transactional persistence, and retry/rate-limit queueing.
 
 ## Architecture
 
@@ -50,8 +53,11 @@ The HTTP server is intentionally thin. Business behavior lives in:
 ```text
 src/services/syncService.js
 src/services/fieldMapper.js
+src/adapters/index.js
 src/adapters/mockWixAdapter.js
 src/adapters/mockHubSpotAdapter.js
+src/adapters/realWixAdapter.js
+src/adapters/realHubSpotAdapter.js
 src/storage/jsonStore.js
 ```
 
@@ -68,9 +74,11 @@ The dashboard is a self-hosted stand-in for the Wix App Dashboard surface. In pr
 - Expanded contact/attribution mappings including company, UTM medium, UTM term, and UTM content
 - Timestamp conflict handling using a latest-updated-wins rule
 - Contact ID mapping: `wixContactId <-> hubspotContactId`
-- Loop prevention using `syncId`, source tracking, and idempotent updates
+- Loop prevention using recent `syncId` history, source timestamps, and idempotent updates
+- Same-source stale replay protection so older Wix or HubSpot events cannot overwrite newer accepted data
 - Origin-tag handling to ignore webhook echoes produced by this integration
 - API key protection for webhook-style sync endpoints
+- Mapping validation for direction and transform values
 - Sync activity log for observability
 
 ## Run Locally
@@ -131,6 +139,7 @@ HUBSPOT_CLIENT_ID=
 HUBSPOT_CLIENT_SECRET=
 HUBSPOT_REDIRECT_URI=http://localhost:3000/api/auth/hubspot/callback
 HUBSPOT_MODE=mock
+WIX_MODE=mock
 WEBHOOK_API_KEY=dev-webhook-secret
 ```
 
@@ -143,6 +152,7 @@ Mock mode:
 - Stores demo data in `data/app-db.json`
 - Simulates HubSpot contact create/update behavior
 - Simulates Wix contact create/update behavior
+- Uses mock adapters by default, preserving a credential-free demo
 - Keeps OAuth tokens out of the browser by design
 - Does not return the webhook key from the API; reviewers enter the local demo key in the dashboard
 - Uses local demo IDs in the dashboard so repeated clicks demonstrate update flows
@@ -150,7 +160,10 @@ Mock mode:
 
 Production mode:
 
-- Exchange HubSpot OAuth `code` for access and refresh tokens on the server
+- `HUBSPOT_MODE=real` and `WIX_MODE=real` select explicit real-adapter placeholders instead of mock adapters
+- The HubSpot OAuth callback returns a clear `501` until server-side token exchange is implemented
+- Real adapters fail with clear configuration errors until required credentials and API calls are wired
+- Exchange HubSpot OAuth `code` for access and refresh tokens on the server before enabling real HubSpot sync
 - Store encrypted tokens in a database or secret manager
 - Replace mock adapters with real Wix and HubSpot API clients
 - Validate Wix and HubSpot webhook signatures
@@ -176,9 +189,10 @@ Sync data model:
 - Store external ID mapping: `wixContactId <-> hubspotContactId`
 - Store `syncId`, `source`, and timestamps for each sync event
 - Ignore duplicate events with the same correlation ID
+- Track a bounded recent `syncId` history per contact mapping so replayed older IDs are skipped even after newer events
 - Ignore webhook events with `origin: "wix-hubspot-integration"` so writes from this app do not echo back into another write
 - Avoid rewriting identical values
-- Conflict strategy: latest updated timestamp wins. Wix events older than the last accepted HubSpot update are skipped, and HubSpot events older than the last accepted Wix update are skipped.
+- Conflict strategy: latest updated timestamp wins. Wix events older than the last accepted Wix or HubSpot update are skipped, and HubSpot events older than the last accepted HubSpot or Wix update are skipped.
 
 ### Feature 2: Form and Lead Capture
 
@@ -381,7 +395,8 @@ Production persistence should replace `data/app-db.json` with database tables fo
 ## Current Limitations
 
 - Real Wix webhook registration is documented but not connected in this local demo.
-- Real HubSpot token exchange is represented as a server-side route placeholder.
+- Real HubSpot token exchange is not implemented; the callback returns `501` in real mode instead of pretending tokens were exchanged.
+- Real adapter files define production boundaries but intentionally do not make Wix or HubSpot API calls yet.
 - JSON storage is for local review only and should be replaced before deployment.
 - Webhook API key protection should be upgraded to provider signature validation in production.
 - Field mapping suggestions are static in mock mode; production should load real field catalogs.

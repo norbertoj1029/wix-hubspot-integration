@@ -20,3 +20,9 @@ export function upsertMockWixContact(db, fields, existingWixId, sourceUpdatedAt 
   db.mockWixContacts.push(created);
   return { contact: created, action: "created" };
 }
+
+export function createMockWixAdapter() {
+  return {
+    upsertContact: upsertMockWixContact
+  };
+}

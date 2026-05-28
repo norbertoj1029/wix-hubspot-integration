@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import http from "node:http";
+import { createAdapters } from "./adapters/index.js";
 import { defaultMappings } from "./config/defaultMappings.js";
 import { createJsonStore } from "./storage/jsonStore.js";
 import { id, now } from "./lib/time.js";
@@ -17,7 +18,10 @@ const defaultDbPath = join(dataDir, "app-db.json");
 const port = Number(process.env.PORT || 3000);
 const appBaseUrl = process.env.APP_BASE_URL || `http://localhost:${port}`;
 const hubspotMode = process.env.HUBSPOT_MODE || "mock";
+const wixMode = process.env.WIX_MODE || "mock";
 const webhookApiKey = process.env.WEBHOOK_API_KEY || "dev-webhook-secret";
+const allowedMappingDirections = new Set(["bidirectional", "wix-to-hubspot", "hubspot-to-wix"]);
+const allowedMappingTransforms = new Set(["none", "trim", "lowercase", "uppercase"]);
 const protectedRoutes = new Set([
   "/api/auth/hubspot/connect",
   "/api/auth/hubspot/disconnect",
@@ -61,6 +65,14 @@ function hasValue(value) {
 function validateMappingsPayload(body) {
   if (!Array.isArray(body.mappings) || body.mappings.length === 0) {
     return "Request body must include at least one mapping.";
+  }
+  for (const mapping of body.mappings) {
+    if (!allowedMappingDirections.has(mapping.direction)) {
+      return `Invalid mapping direction: ${mapping.direction}`;
+    }
+    if (!allowedMappingTransforms.has(mapping.transform)) {
+      return `Invalid mapping transform: ${mapping.transform}`;
+    }
   }
   return null;
 }
@@ -157,7 +169,7 @@ function serveStatic(req, res, baseUrl = appBaseUrl) {
   }
 }
 
-async function routeApi(req, res, { store, baseUrl, mode, apiKey }) {
+async function routeApi(req, res, { store, baseUrl, mode, apiKey, adapters }) {
   const url = new URL(req.url, baseUrl);
   const db = store.read();
 
@@ -209,6 +221,13 @@ async function routeApi(req, res, { store, baseUrl, mode, apiKey }) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/auth/hubspot/callback") {
+    if (mode === "real") {
+      return sendJson(res, 501, {
+        error:
+          "HubSpot OAuth callback received, but token exchange is not implemented in this demo. Configure a server-side token exchange before enabling real mode."
+      });
+    }
+
     db.connection = {
       connected: true,
       mode,
@@ -219,7 +238,7 @@ async function routeApi(req, res, { store, baseUrl, mode, apiKey }) {
     logEvent(db, {
       source: "system",
       syncId: id("corr"),
-      message: "Received HubSpot OAuth callback. Token exchange is documented for production setup.",
+      message: "Received mock HubSpot OAuth callback. Token exchange remains pending for production setup.",
       details: { codeReceived: Boolean(url.searchParams.get("code")) }
     });
     store.write(db);
@@ -283,7 +302,7 @@ async function routeApi(req, res, { store, baseUrl, mode, apiKey }) {
     const validationError = validateWixContactPayload(body);
     if (validationError) return sendJson(res, 400, { error: validationError });
 
-    const event = syncWixContactToHubSpot(db, body);
+    const event = syncWixContactToHubSpot(db, body, { adapters });
     store.write(db);
     return sendJson(res, 200, { event: redactSensitive(event) });
   }
@@ -293,7 +312,7 @@ async function routeApi(req, res, { store, baseUrl, mode, apiKey }) {
     const validationError = validateHubSpotContactPayload(body);
     if (validationError) return sendJson(res, 400, { error: validationError });
 
-    const event = syncHubSpotContactToWix(db, body);
+    const event = syncHubSpotContactToWix(db, body, { adapters });
     store.write(db);
     return sendJson(res, 200, { event: redactSensitive(event) });
   }
@@ -333,12 +352,16 @@ async function routeApi(req, res, { store, baseUrl, mode, apiKey }) {
     };
     db.formSubmissions.unshift(submission);
     db.formSubmissions = db.formSubmissions.slice(0, 50);
-    const event = syncWixContactToHubSpot(db, {
-      wixContactId: body.wixContactId,
-      syncId: body.syncId,
-      updatedAt: body.updatedAt,
-      fields: submissionFields
-    });
+    const event = syncWixContactToHubSpot(
+      db,
+      {
+        wixContactId: body.wixContactId,
+        syncId: body.syncId,
+        updatedAt: body.updatedAt,
+        fields: submissionFields
+      },
+      { adapters }
+    );
     event.message = "Captured Wix form submission and synced lead to HubSpot.";
     store.write(db);
     return sendJson(res, 200, { submission: redactSensitive(submission), event: redactSensitive(event) });
@@ -350,16 +373,21 @@ async function routeApi(req, res, { store, baseUrl, mode, apiKey }) {
 export function createRequestHandler(options = {}) {
   const serverPort = Number(options.port || port);
   const mode = options.hubspotMode || hubspotMode;
+  const selectedWixMode = options.wixMode || wixMode;
   const baseUrl = options.appBaseUrl || `http://localhost:${serverPort}`;
   const store = createJsonStore(options.dbPath || process.env.DB_PATH || defaultDbPath, () => initialDb(mode));
   const apiKey = options.webhookApiKey || webhookApiKey;
+  const env = options.env || process.env;
+  const adapters = options.adapters || createAdapters({ hubspotMode: mode, wixMode: selectedWixMode, env });
 
   return async function handleRequest(req, res) {
     try {
-      if (req.url.startsWith("/api/")) return await routeApi(req, res, { store, baseUrl, mode, apiKey });
+      if (req.url.startsWith("/api/")) return await routeApi(req, res, { store, baseUrl, mode, apiKey, adapters });
       return serveStatic(req, res, baseUrl);
     } catch (error) {
-      const status = error.message === "Invalid JSON body" || error.message === "Request body too large" ? 400 : 500;
+      const status =
+        error.statusCode ||
+        (error.message === "Invalid JSON body" || error.message === "Request body too large" ? 400 : 500);
       return sendJson(res, status, { error: error.message || "Unexpected server error" });
     }
   };
@@ -372,7 +400,7 @@ export function createServer(options = {}) {
 const isEntrypoint = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 
 if (isEntrypoint) {
-  const server = createServer({ port, appBaseUrl, hubspotMode, dbPath: process.env.DB_PATH || defaultDbPath });
+  const server = createServer({ port, appBaseUrl, hubspotMode, wixMode, dbPath: process.env.DB_PATH || defaultDbPath });
   server.listen(port, () => {
     console.log(`Wix HubSpot integration running at ${appBaseUrl}`);
   });
