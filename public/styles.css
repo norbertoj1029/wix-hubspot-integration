@@ -76,6 +76,11 @@ button.secondary:hover {
   text-transform: uppercase;
 }
 
+.summary {
+  max-width: 680px;
+  margin: 8px 0 0;
+}
+
 h1,
 h2,
 p {
@@ -94,6 +99,7 @@ h2 {
 }
 
 p {
+  margin-bottom: 14px;
   color: var(--muted);
 }
 
@@ -103,6 +109,40 @@ p {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.statusStrip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.statusStrip div {
+  min-height: 70px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fff;
+}
+
+.statusStrip span,
+.stepLabel {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.statusStrip strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 17px;
+}
+
+.stepLabel {
+  margin-bottom: 6px;
 }
 
 .badge {
@@ -230,6 +270,11 @@ label {
   background: #f9fbfd;
 }
 
+.logItem.skipped {
+  border-color: #f0d28a;
+  background: #fff9e8;
+}
+
 .logItem strong {
   display: block;
   margin-bottom: 5px;
@@ -251,6 +296,10 @@ label {
   }
 
   .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .statusStrip {
     grid-template-columns: 1fr;
   }
 }

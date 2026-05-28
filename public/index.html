@@ -12,6 +12,7 @@
         <div>
           <p class="eyebrow">Self-hosted app prototype</p>
           <h1>Wix HubSpot Integration</h1>
+          <p class="summary">Review the mapping rules, connect the demo account, then run the contact and form sync flows.</p>
         </div>
         <div class="connection">
           <span id="connectionBadge" class="badge">Loading</span>
@@ -20,12 +21,27 @@
         </div>
       </section>
 
+      <section class="statusStrip" aria-label="Demo status">
+        <div>
+          <span>Mode</span>
+          <strong id="modeValue">Mock</strong>
+        </div>
+        <div>
+          <span>Protected routes</span>
+          <strong>API key enabled</strong>
+        </div>
+        <div>
+          <span>Conflict rule</span>
+          <strong>Latest updated wins</strong>
+        </div>
+      </section>
+
       <section class="grid">
         <article class="panel wide">
           <div class="panelHeader">
             <div>
               <h2>Field Mapping</h2>
-              <p>Saved rules used by both contact sync directions.</p>
+              <p>Configure how Wix fields map to HubSpot contact properties. Sync flows use the saved rows below.</p>
             </div>
             <div class="actions">
               <button id="addMappingBtn" class="secondary">Add row</button>
@@ -49,7 +65,9 @@
         </article>
 
         <article class="panel">
-          <h2>Simulate Wix Contact</h2>
+          <p class="stepLabel">Demo step 1</p>
+          <h2>Wix Contact Event</h2>
+          <p>Simulates a Wix contact create/update webhook protected by the API key header.</p>
           <form id="wixContactForm" class="stack">
             <label>Email <input name="email" value="maria@example.com" /></label>
             <label>First name <input name="firstName" value="Maria" /></label>
@@ -61,7 +79,9 @@
         </article>
 
         <article class="panel">
-          <h2>Simulate HubSpot Contact</h2>
+          <p class="stepLabel">Demo step 2</p>
+          <h2>HubSpot Contact Event</h2>
+          <p>Simulates a HubSpot contact change flowing back into Wix through the same mapping rules.</p>
           <form id="hubspotContactForm" class="stack">
             <label>Email <input name="email" value="alex@example.com" /></label>
             <label>Firstname <input name="firstname" value="Alex" /></label>
@@ -73,7 +93,9 @@
         </article>
 
         <article class="panel">
+          <p class="stepLabel">Demo step 3</p>
           <h2>Wix Form Lead Capture</h2>
+          <p>Captures lead fields plus attribution context and syncs the lead to HubSpot.</p>
           <form id="formSubmissionForm" class="stack">
             <label>Email <input name="email" value="lead@example.com" /></label>
             <label>First name <input name="firstName" value="Jordan" /></label>
@@ -85,7 +107,8 @@
         </article>
 
         <article class="panel">
-          <h2>Mock Records</h2>
+          <h2>Demo Records</h2>
+          <p>Counts update after each simulated event.</p>
           <div class="metricGrid">
             <div><strong id="hubspotCount">0</strong><span>HubSpot contacts</span></div>
             <div><strong id="wixCount">0</strong><span>Wix contacts</span></div>
@@ -98,7 +121,7 @@
           <div class="panelHeader">
             <div>
               <h2>Sync Activity</h2>
-              <p>Recent events show source, correlation ID, and loop-prevention behavior.</p>
+              <p>Recent events show source, status, correlation ID, conflict decisions, and mapped values.</p>
             </div>
           </div>
           <div id="logs" class="logs"></div>

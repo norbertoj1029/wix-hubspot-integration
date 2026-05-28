@@ -6,6 +6,7 @@ const state = {
 const mappingRows = document.querySelector("#mappingRows");
 const connectionBadge = document.querySelector("#connectionBadge");
 const logs = document.querySelector("#logs");
+const modeValue = document.querySelector("#modeValue");
 
 const directionOptions = [
   ["bidirectional", "Bi-directional"],
@@ -83,9 +84,9 @@ function renderLogs(events) {
     events
       .map(
         (event) => `
-          <div class="logItem">
+          <div class="logItem ${event.status === "skipped" ? "skipped" : ""}">
             <strong>${event.message}</strong>
-            <span>${event.createdAt} | source: ${event.source} | syncId: ${event.syncId}</span>
+            <span>${event.createdAt} | status: ${event.status} | source: ${event.source} | syncId: ${event.syncId}</span>
             <code>${JSON.stringify(event.details || {}, null, 2)}</code>
           </div>
         `
@@ -100,6 +101,7 @@ async function refresh() {
   connectionBadge.textContent = data.connection.connected
     ? `Connected (${data.connection.mode})`
     : "Disconnected";
+  modeValue.textContent = data.connection.mode || "mock";
   connectionBadge.classList.toggle("connected", data.connection.connected);
   document.querySelector("#hubspotCount").textContent = data.mockHubSpotContacts.length;
   document.querySelector("#wixCount").textContent = data.mockWixContacts.length;
