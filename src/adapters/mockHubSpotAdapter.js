@@ -33,6 +33,22 @@ export function upsertMockHubSpotContact(db, properties, existingHubSpotId, sour
 
 export function createMockHubSpotAdapter() {
   return {
-    upsertContact: upsertMockHubSpotContact
+    upsertContact: upsertMockHubSpotContact,
+    listContactProperties() {
+      return [
+        "email",
+        "firstname",
+        "lastname",
+        "phone",
+        "company",
+        "wix_utm_source",
+        "wix_utm_medium",
+        "wix_utm_campaign",
+        "wix_utm_term",
+        "wix_utm_content",
+        "wix_page_url",
+        "wix_referrer"
+      ].map((name) => ({ name, label: name }));
+    }
   };
 }

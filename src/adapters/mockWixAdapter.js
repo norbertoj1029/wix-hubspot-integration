@@ -23,6 +23,22 @@ export function upsertMockWixContact(db, fields, existingWixId, sourceUpdatedAt 
 
 export function createMockWixAdapter() {
   return {
-    upsertContact: upsertMockWixContact
+    upsertContact: upsertMockWixContact,
+    listContactFields() {
+      return [
+        "email",
+        "firstName",
+        "lastName",
+        "phone",
+        "company",
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_term",
+        "utm_content",
+        "pageUrl",
+        "referrer"
+      ].map((name) => ({ name, label: name }));
+    }
   };
 }
