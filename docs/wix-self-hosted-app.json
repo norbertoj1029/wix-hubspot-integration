@@ -1,0 +1,37 @@
+{
+  "name": "Wix HubSpot Integration",
+  "type": "self-hosted-wix-app",
+  "appUrl": "${APP_BASE_URL}",
+  "dashboardUrl": "${APP_BASE_URL}",
+  "oauth": {
+    "appIdEnv": "WIX_APP_ID",
+    "appSecretEnv": "WIX_APP_SECRET",
+    "tokenEndpoint": "https://www.wixapis.com/oauth2/token",
+    "grantType": "client_credentials",
+    "instanceIdSource": "signed Wix instance/app token installId"
+  },
+  "permissions": [
+    "Contacts read",
+    "Contacts write",
+    "Forms/submissions webhook access",
+    "App instance/site identity"
+  ],
+  "webhooks": {
+    "wixContact": "${APP_BASE_URL}/api/webhooks/wix-contact",
+    "wixForm": "${APP_BASE_URL}/api/webhooks/wix-form"
+  },
+  "backendEndpoints": {
+    "install": "POST ${APP_BASE_URL}/api/auth/wix/install",
+    "hubspotConnect": "POST ${APP_BASE_URL}/api/auth/hubspot/connect",
+    "hubspotCallback": "GET ${APP_BASE_URL}/api/auth/hubspot/callback",
+    "hubspotWebhook": "POST ${APP_BASE_URL}/api/webhooks/hubspot-contact",
+    "hubspotPollingFallback": "POST ${APP_BASE_URL}/api/poll/hubspot",
+    "retryRunner": "POST ${APP_BASE_URL}/api/retry/due"
+  },
+  "security": {
+    "dashboardAuth": "Signed Wix instance/app token",
+    "wixWebhookAuth": "WIX_WEBHOOK_SECRET HMAC signature",
+    "hubspotWebhookAuth": "HubSpot signature with HUBSPOT_CLIENT_SECRET",
+    "tokenStorage": "Wix Secret Manager handoff or AES-256-GCM encrypted self-hosted storage"
+  }
+}
