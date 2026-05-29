@@ -18,6 +18,8 @@ const lastSyncValue = document.querySelector("#lastSyncValue");
 const retryValue = document.querySelector("#retryValue");
 const wixFieldOptions = document.querySelector("#wixFieldOptions");
 const hubspotPropertyOptions = document.querySelector("#hubspotPropertyOptions");
+const toastRegion = document.querySelector("#toastRegion");
+const pollHubspotBtn = document.querySelector("#pollHubspotBtn");
 
 const directionOptions = [
   ["bidirectional", "Bi-directional"],
@@ -83,6 +85,48 @@ async function api(path, options = {}) {
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Request failed");
   return data;
+}
+
+function showToast(message, type = "success") {
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  toastRegion.append(toast);
+  window.setTimeout(() => {
+    toast.classList.add("leaving");
+    window.setTimeout(() => toast.remove(), 220);
+  }, 4200);
+}
+
+function humanDate(value) {
+  if (!value) return "None";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(date);
+}
+
+async function runAction(button, busyLabel, action, successMessage) {
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.classList.add("busy");
+  button.textContent = busyLabel;
+  try {
+    const result = await action();
+    if (successMessage) showToast(successMessage, "success");
+    return result;
+  } catch (error) {
+    showToast(error.message || "Something went wrong.", "error");
+    throw error;
+  } finally {
+    button.disabled = false;
+    button.classList.remove("busy");
+    button.textContent = originalLabel;
+  }
 }
 
 function formToObject(form) {
@@ -184,16 +228,21 @@ async function refresh() {
   });
   document.querySelector("#recordsTitle").textContent = state.mode === "real" ? "Production State" : "Demo Records";
   const checkpoint = (data.pollingCheckpoints || []).find((item) => item.provider === "hubspot");
+  const pollingAvailable = state.mode === "real" && data.connection.connected;
   pollingValue.textContent = checkpoint
-    ? `${checkpoint.status} (${checkpoint.lastSeenModifiedAt || "no checkpoint"})`
+    ? `${checkpoint.status} (${humanDate(checkpoint.lastSeenModifiedAt)})`
     : data.webhookRegistrations?.[0]?.status || "Not configured";
+  pollHubspotBtn.disabled = !pollingAvailable;
+  pollHubspotBtn.title = pollingAvailable
+    ? "Run the HubSpot polling fallback."
+    : "Polling is only available after a real HubSpot connection is configured.";
   wixInstallValue.textContent =
     state.mode === "real"
       ? data.connection.wixTokenExpiresAt
-        ? `Installed (token until ${data.connection.wixTokenExpiresAt})`
+        ? `Installed until ${humanDate(data.connection.wixTokenExpiresAt)}`
         : "Installed"
       : "Local mock";
-  lastSyncValue.textContent = data.syncEvents?.[0]?.createdAt || "None";
+  lastSyncValue.textContent = humanDate(data.syncEvents?.[0]?.createdAt);
   const pendingRetries = (data.retryJobs || []).filter((job) => job.status === "pending").length;
   retryValue.textContent = `${pendingRetries} pending`;
   connectionBadge.classList.toggle("connected", data.connection.connected);
@@ -217,20 +266,45 @@ wixTokenInput.addEventListener("input", (event) => {
   localStorage.setItem("wixHubspotInstanceToken", state.wixToken);
 });
 
-document.querySelector("#connectBtn").addEventListener("click", async () => {
-  const result = await api("/api/auth/hubspot/connect", { method: "POST" });
-  if (result.redirectUrl) window.location.href = result.redirectUrl;
-  await refresh();
+document.querySelector("#connectBtn").addEventListener("click", async (event) => {
+  await runAction(
+    event.currentTarget,
+    "Connecting...",
+    async () => {
+      const result = await api("/api/auth/hubspot/connect", { method: "POST" });
+      if (result.redirectUrl) window.location.href = result.redirectUrl;
+      await refresh();
+    },
+    "HubSpot connection is ready."
+  );
 });
 
-document.querySelector("#disconnectBtn").addEventListener("click", async () => {
-  await api("/api/auth/hubspot/disconnect", { method: "POST" });
-  await refresh();
+document.querySelector("#disconnectBtn").addEventListener("click", async (event) => {
+  await runAction(
+    event.currentTarget,
+    "Disconnecting...",
+    async () => {
+      await api("/api/auth/hubspot/disconnect", { method: "POST" });
+      await refresh();
+    },
+    "HubSpot disconnected."
+  );
 });
 
-document.querySelector("#pollHubspotBtn").addEventListener("click", async () => {
-  await api("/api/poll/hubspot", { method: "POST", body: JSON.stringify({}) });
-  await refresh();
+pollHubspotBtn.addEventListener("click", async (event) => {
+  if (state.mode !== "real") {
+    showToast("Polling is only used in real HubSpot mode. Use the mock sync buttons for this local demo.", "error");
+    return;
+  }
+  await runAction(
+    event.currentTarget,
+    "Polling...",
+    async () => {
+      await api("/api/poll/hubspot", { method: "POST", body: JSON.stringify({}) });
+      await refresh();
+    },
+    "HubSpot polling completed."
+  );
 });
 
 document.querySelector("#addMappingBtn").addEventListener("click", () => {
@@ -243,12 +317,19 @@ document.querySelector("#addMappingBtn").addEventListener("click", () => {
   renderMappings();
 });
 
-document.querySelector("#saveMappingsBtn").addEventListener("click", async () => {
-  await api("/api/mappings", {
-    method: "POST",
-    body: JSON.stringify({ mappings: collectMappings() })
-  });
-  await refresh();
+document.querySelector("#saveMappingsBtn").addEventListener("click", async (event) => {
+  await runAction(
+    event.currentTarget,
+    "Saving...",
+    async () => {
+      await api("/api/mappings", {
+        method: "POST",
+        body: JSON.stringify({ mappings: collectMappings() })
+      });
+      await refresh();
+    },
+    "Field mappings saved."
+  );
 });
 
 mappingRows.addEventListener("click", (event) => {
@@ -260,49 +341,73 @@ mappingRows.addEventListener("click", (event) => {
 
 document.querySelector("#wixContactForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  await api("/api/sync/wix-contact", {
-    method: "POST",
-    body: JSON.stringify({
-      wixContactId: demoIds.wixContactId,
-      updatedAt: new Date().toISOString(),
-      fields: formToObject(event.currentTarget)
-    })
-  });
-  await refresh();
+  const button = event.currentTarget.querySelector("button[type='submit']");
+  await runAction(
+    button,
+    "Syncing...",
+    async () => {
+      await api("/api/sync/wix-contact", {
+        method: "POST",
+        body: JSON.stringify({
+          wixContactId: demoIds.wixContactId,
+          updatedAt: new Date().toISOString(),
+          fields: formToObject(event.currentTarget)
+        })
+      });
+      await refresh();
+    },
+    "Wix contact synced to HubSpot."
+  );
 });
 
 document.querySelector("#hubspotContactForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  await api("/api/sync/hubspot-contact", {
-    method: "POST",
-    body: JSON.stringify({
-      hubspotContactId: demoIds.hubspotContactId,
-      updatedAt: new Date().toISOString(),
-      properties: formToObject(event.currentTarget)
-    })
-  });
-  await refresh();
+  const button = event.currentTarget.querySelector("button[type='submit']");
+  await runAction(
+    button,
+    "Syncing...",
+    async () => {
+      await api("/api/sync/hubspot-contact", {
+        method: "POST",
+        body: JSON.stringify({
+          hubspotContactId: demoIds.hubspotContactId,
+          updatedAt: new Date().toISOString(),
+          properties: formToObject(event.currentTarget)
+        })
+      });
+      await refresh();
+    },
+    "HubSpot contact synced to Wix."
+  );
 });
 
 document.querySelector("#formSubmissionForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const data = formToObject(event.currentTarget);
-  await api("/api/forms/wix-submission", {
-    method: "POST",
-    body: JSON.stringify({
-      ...data,
-      wixContactId: demoIds.formContactId,
-      updatedAt: new Date().toISOString(),
-      pageUrl: "https://demo-wix-site.example/contact",
-      referrer: "https://google.com",
-      fields: {
-        ...data,
-        pageUrl: "https://demo-wix-site.example/contact",
-        referrer: "https://google.com"
-      }
-    })
-  });
-  await refresh();
+  const button = event.currentTarget.querySelector("button[type='submit']");
+  await runAction(
+    button,
+    "Capturing...",
+    async () => {
+      await api("/api/forms/wix-submission", {
+        method: "POST",
+        body: JSON.stringify({
+          ...data,
+          wixContactId: demoIds.formContactId,
+          updatedAt: new Date().toISOString(),
+          pageUrl: "https://demo-wix-site.example/contact",
+          referrer: "https://google.com",
+          fields: {
+            ...data,
+            pageUrl: "https://demo-wix-site.example/contact",
+            referrer: "https://google.com"
+          }
+        })
+      });
+      await refresh();
+    },
+    "Lead captured with UTM attribution."
+  );
 });
 
 refresh().catch((error) => {
@@ -316,4 +421,5 @@ refresh().catch((error) => {
       ? "Production mode requires a signed Wix instance/app token. Paste it in the protected routes field above."
       : error.message
   )}</p>`;
+  showToast(error.message || "Could not load dashboard state.", "error");
 });
