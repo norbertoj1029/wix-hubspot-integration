@@ -8,16 +8,17 @@
   </head>
   <body>
     <main class="shell">
+      <div id="toastRegion" class="toastRegion" aria-live="polite" aria-atomic="true"></div>
       <section class="topbar">
         <div>
           <p class="eyebrow">Self-hosted Wix app</p>
           <h1>Wix HubSpot Integration</h1>
-          <p class="summary">Manage HubSpot connection, Wix installation state, field mappings, polling fallback, and sync health.</p>
+          <p class="summary">Connect HubSpot, map fields, and run a quick Wix-to-HubSpot sync demo with visible results.</p>
         </div>
         <div class="connection">
           <span id="connectionBadge" class="badge">Loading</span>
           <button id="connectBtn">Connect HubSpot</button>
-          <button id="disconnectBtn" class="secondary">Disconnect</button>
+          <button id="disconnectBtn" class="secondary danger">Disconnect</button>
         </div>
       </section>
 
@@ -56,10 +57,10 @@
           <div class="panelHeader">
             <div>
               <h2>Field Mapping</h2>
-              <p>Configure how Wix fields map to HubSpot contact properties. Sync flows use the saved rows below.</p>
+              <p>Saved rows control which Wix values are written to HubSpot and which HubSpot values flow back to Wix.</p>
             </div>
             <div class="actions">
-              <button id="addMappingBtn" class="secondary">Add row</button>
+              <button id="addMappingBtn" class="secondary subtle">Add row</button>
               <button id="saveMappingsBtn">Save mapping</button>
             </div>
           </div>
@@ -84,7 +85,7 @@
         <article class="panel mockOnly">
           <p class="stepLabel">Demo step 1</p>
           <h2>Wix Contact Event</h2>
-          <p>Simulates a Wix contact create/update webhook protected by the API key header.</p>
+          <p>Creates or updates a HubSpot contact from the Wix contact fields below.</p>
           <form id="wixContactForm" class="stack">
             <label>Email <input name="email" value="maria@example.com" /></label>
             <label>First name <input name="firstName" value="Maria" /></label>
@@ -98,7 +99,7 @@
         <article class="panel mockOnly">
           <p class="stepLabel">Demo step 2</p>
           <h2>HubSpot Contact Event</h2>
-          <p>Simulates a HubSpot contact change flowing back into Wix through the same mapping rules.</p>
+          <p>Creates or updates a Wix contact from HubSpot values using the same mapping table.</p>
           <form id="hubspotContactForm" class="stack">
             <label>Email <input name="email" value="alex@example.com" /></label>
             <label>Firstname <input name="firstname" value="Alex" /></label>
@@ -112,7 +113,7 @@
         <article class="panel mockOnly">
           <p class="stepLabel">Demo step 3</p>
           <h2>Wix Form Lead Capture</h2>
-          <p>Captures lead fields plus attribution context and syncs the lead to HubSpot.</p>
+          <p>Sends a form lead to HubSpot with source, campaign, page URL, and referrer context.</p>
           <form id="formSubmissionForm" class="stack">
             <label>Email <input name="email" value="lead@example.com" /></label>
             <label>First name <input name="firstName" value="Jordan" /></label>
@@ -125,7 +126,7 @@
 
         <article class="panel">
           <h2 id="recordsTitle">Demo Records</h2>
-          <p>Counts update after each simulated event.</p>
+          <p>These counts confirm what changed after each button click.</p>
           <div class="metricGrid">
             <div><strong id="hubspotCount">0</strong><span>HubSpot contacts</span></div>
             <div><strong id="wixCount">0</strong><span>Wix contacts</span></div>
@@ -138,7 +139,7 @@
           <div class="panelHeader">
             <div>
               <h2>Sync Activity</h2>
-              <p>Recent events show source, status, correlation ID, conflict decisions, and mapped values.</p>
+              <p>Latest events appear first. Details are redacted where they may contain contact data.</p>
             </div>
           </div>
           <div id="logs" class="logs"></div>

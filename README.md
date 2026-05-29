@@ -26,6 +26,36 @@ Production reviewer credentials are intentionally not committed. To review real 
 
 See `REVIEWER.md` for the deployed-review checklist, Wix app settings, HubSpot app settings, and step-by-step acceptance test script.
 
+## Architecture
+
+```mermaid
+flowchart TB
+  classDef external fill:#1d4ed8,stroke:#93c5fd,color:#ffffff
+  classDef app fill:#15803d,stroke:#86efac,color:#ffffff
+  classDef data fill:#b45309,stroke:#fed7aa,color:#ffffff
+  classDef worker fill:#6d28d9,stroke:#ddd6fe,color:#ffffff
+
+  Wix[Wix Site<br/>Dashboard, Contacts, Forms]:::external
+  App[Self-hosted Node App<br/>OAuth, Mapping, Webhooks, Sync API]:::app
+  HubSpot[HubSpot CRM<br/>Contacts API, Properties API, Webhooks]:::external
+  Store[(SQLite Storage<br/>Site state, mappings, tokens, event IDs)]:::data
+  Retry[Retry Jobs<br/>429 and 5xx backoff]:::worker
+  Polling[Polling Fallback<br/>HubSpot changes without webhooks]:::worker
+
+  Wix -->|Dashboard requests| App
+  Wix -->|Contact and form webhooks| App
+  App -->|Create and update Wix contacts| Wix
+
+  App -->|OAuth and contact sync| HubSpot
+  HubSpot -->|Contact webhooks| App
+
+  App <--> Store
+  App --> Retry
+  Retry --> App
+  App --> Polling
+  Polling --> HubSpot
+```
+
 ## What Is Implemented
 
 - HubSpot OAuth connect/callback/disconnect with CSRF `state` bound to a Wix site/installation.
