@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { AdapterHttpError } from "../src/adapters/adapterErrors.js";
 import { defaultMappings } from "../src/config/defaultMappings.js";
 import { syncHubSpotContactToWix, syncWixContactToHubSpot } from "../src/services/syncService.js";
 
@@ -9,6 +10,7 @@ function createDb() {
     contactMappings: [],
     syncEvents: [],
     formSubmissions: [],
+    retryJobs: [],
     mockHubSpotContacts: [],
     mockWixContacts: []
   };
@@ -64,6 +66,24 @@ test("self-produced HubSpot webhook is ignored by origin tag", () => {
     hubspotContactId: "hs_self",
     origin: "wix-hubspot-integration",
     properties: { email: "self@example.com", firstname: "Self" }
+  });
+
+  assert.equal(skipped.status, "skipped");
+  assert.match(skipped.message, /produced by this integration/);
+  assert.equal(db.mockWixContacts.length, 0);
+});
+
+test("echo webhook with outbound sync metadata is ignored", () => {
+  const db = createDb();
+
+  const skipped = syncHubSpotContactToWix(db, {
+    hubspotContactId: "hs_echo",
+    properties: {
+      email: "echo@example.com",
+      firstname: "Echo",
+      wix_hubspot_origin: "wix-hubspot-integration",
+      wix_hubspot_sync_id: "sync_echo"
+    }
   });
 
   assert.equal(skipped.status, "skipped");
@@ -166,4 +186,64 @@ test("UTM and page attribution fields map to HubSpot properties", () => {
   assert.equal(event.details.properties.wix_utm_campaign, "launch");
   assert.equal(event.details.properties.wix_page_url, "https://example.com/contact");
   assert.equal(event.details.properties.wix_referrer, "https://google.com");
+});
+
+test("outbound writes include origin and correlation metadata", () => {
+  const db = createDb();
+
+  syncWixContactToHubSpot(db, {
+    wixContactId: "wix_origin",
+    syncId: "sync_origin",
+    fields: { email: "origin@example.com", firstName: "Origin" }
+  });
+
+  assert.equal(db.mockHubSpotContacts[0].properties.wix_hubspot_origin, "wix-hubspot-integration");
+  assert.equal(db.mockHubSpotContacts[0].properties.wix_hubspot_sync_id, "sync_origin");
+  assert.match(db.mockHubSpotContacts[0].properties.wix_hubspot_synced_at, /^\d{4}-/);
+});
+
+test("identical mapped values are skipped instead of rewritten", () => {
+  const db = createDb();
+
+  syncWixContactToHubSpot(db, {
+    wixContactId: "wix_same_values",
+    syncId: "sync_same_values_1",
+    updatedAt: "2026-05-28T10:00:00.000Z",
+    fields: { email: "same-values@example.com", firstName: "Same" }
+  });
+  const skipped = syncWixContactToHubSpot(db, {
+    wixContactId: "wix_same_values",
+    syncId: "sync_same_values_2",
+    updatedAt: "2026-05-28T10:05:00.000Z",
+    fields: { email: "same-values@example.com", firstName: "Same" }
+  });
+
+  assert.equal(skipped.status, "skipped");
+  assert.match(skipped.message, /unchanged/);
+});
+
+test("failed transient sync write creates a retry job", async () => {
+  const db = createDb();
+  const adapters = {
+    hubspot: {
+      async upsertContact() {
+        throw new AdapterHttpError("HubSpot rate limit exceeded.", 429);
+      }
+    }
+  };
+
+  const event = await syncWixContactToHubSpot(
+    db,
+    {
+      wixContactId: "wix_retry",
+      syncId: "sync_retry",
+      fields: { email: "retry@example.com", firstName: "Retry" }
+    },
+    { adapters }
+  );
+
+  assert.equal(event.status, "retry_pending");
+  assert.equal(db.retryJobs.length, 1);
+  assert.equal(db.retryJobs[0].direction, "wix-to-hubspot");
+  assert.equal(db.retryJobs[0].permanent, false);
 });
