@@ -1,6 +1,8 @@
 const state = {
   mappings: [],
-  apiKey: localStorage.getItem("wixHubspotDemoApiKey") || ""
+  apiKey: localStorage.getItem("wixHubspotDemoApiKey") || "",
+  wixToken: localStorage.getItem("wixHubspotInstanceToken") || "",
+  mode: "mock"
 };
 
 const mappingRows = document.querySelector("#mappingRows");
@@ -8,6 +10,12 @@ const connectionBadge = document.querySelector("#connectionBadge");
 const logs = document.querySelector("#logs");
 const modeValue = document.querySelector("#modeValue");
 const apiKeyInput = document.querySelector("#apiKeyInput");
+const wixTokenInput = document.querySelector("#wixTokenInput");
+const authModeValue = document.querySelector("#authModeValue");
+const pollingValue = document.querySelector("#pollingValue");
+const wixInstallValue = document.querySelector("#wixInstallValue");
+const lastSyncValue = document.querySelector("#lastSyncValue");
+const retryValue = document.querySelector("#retryValue");
 const wixFieldOptions = document.querySelector("#wixFieldOptions");
 const hubspotPropertyOptions = document.querySelector("#hubspotPropertyOptions");
 
@@ -62,11 +70,12 @@ const demoIds = {
 
 async function api(path, options = {}) {
   const method = options.method || "GET";
-  const protectedRoute = method !== "GET";
+  const protectedRoute = method !== "GET" || path === "/api/catalogs" || path === "/api/state";
   const response = await fetch(path, {
     headers: {
       "content-type": "application/json",
-      ...(protectedRoute ? { "x-webhook-api-key": state.apiKey } : {}),
+      ...(protectedRoute && state.wixToken ? { authorization: `Bearer ${state.wixToken}` } : {}),
+      ...(protectedRoute && !state.wixToken ? { "x-webhook-api-key": state.apiKey } : {}),
       ...(options.headers || {})
     },
     ...options
@@ -149,11 +158,44 @@ function renderLogs(events) {
 
 async function refresh() {
   const data = await api("/api/state");
+  api("/api/catalogs")
+    .then((catalogs) => {
+      wixFieldCatalog.splice(0, wixFieldCatalog.length, ...catalogs.wixFields.map((field) => field.name));
+      hubspotPropertyCatalog.splice(
+        0,
+        hubspotPropertyCatalog.length,
+        ...catalogs.hubspotProperties.map((property) => property.name)
+      );
+      renderCatalogOptions();
+    })
+    .catch(() => {});
   state.mappings = data.mappings;
+  state.mode = data.connection.mode || "mock";
   connectionBadge.textContent = data.connection.connected
     ? `Connected (${data.connection.mode})`
     : "Disconnected";
-  modeValue.textContent = data.connection.mode || "mock";
+  modeValue.textContent = state.mode;
+  authModeValue.textContent = state.mode === "real" ? "Wix signed token" : "API key enabled";
+  apiKeyInput.closest("div").classList.toggle("realAuth", state.mode === "real");
+  apiKeyInput.hidden = state.mode === "real";
+  wixTokenInput.hidden = state.mode !== "real";
+  document.querySelectorAll(".mockOnly").forEach((element) => {
+    element.hidden = state.mode === "real";
+  });
+  document.querySelector("#recordsTitle").textContent = state.mode === "real" ? "Production State" : "Demo Records";
+  const checkpoint = (data.pollingCheckpoints || []).find((item) => item.provider === "hubspot");
+  pollingValue.textContent = checkpoint
+    ? `${checkpoint.status} (${checkpoint.lastSeenModifiedAt || "no checkpoint"})`
+    : data.webhookRegistrations?.[0]?.status || "Not configured";
+  wixInstallValue.textContent =
+    state.mode === "real"
+      ? data.connection.wixTokenExpiresAt
+        ? `Installed (token until ${data.connection.wixTokenExpiresAt})`
+        : "Installed"
+      : "Local mock";
+  lastSyncValue.textContent = data.syncEvents?.[0]?.createdAt || "None";
+  const pendingRetries = (data.retryJobs || []).filter((job) => job.status === "pending").length;
+  retryValue.textContent = `${pendingRetries} pending`;
   connectionBadge.classList.toggle("connected", data.connection.connected);
   document.querySelector("#hubspotCount").textContent = data.mockHubSpotContacts.length;
   document.querySelector("#wixCount").textContent = data.mockWixContacts.length;
@@ -164,10 +206,15 @@ async function refresh() {
 }
 
 apiKeyInput.value = state.apiKey;
+wixTokenInput.value = state.wixToken;
 renderCatalogOptions();
 apiKeyInput.addEventListener("input", (event) => {
   state.apiKey = event.currentTarget.value;
   localStorage.setItem("wixHubspotDemoApiKey", state.apiKey);
+});
+wixTokenInput.addEventListener("input", (event) => {
+  state.wixToken = event.currentTarget.value;
+  localStorage.setItem("wixHubspotInstanceToken", state.wixToken);
 });
 
 document.querySelector("#connectBtn").addEventListener("click", async () => {
@@ -178,6 +225,11 @@ document.querySelector("#connectBtn").addEventListener("click", async () => {
 
 document.querySelector("#disconnectBtn").addEventListener("click", async () => {
   await api("/api/auth/hubspot/disconnect", { method: "POST" });
+  await refresh();
+});
+
+document.querySelector("#pollHubspotBtn").addEventListener("click", async () => {
+  await api("/api/poll/hubspot", { method: "POST", body: JSON.stringify({}) });
   await refresh();
 });
 
@@ -254,5 +306,14 @@ document.querySelector("#formSubmissionForm").addEventListener("submit", async (
 });
 
 refresh().catch((error) => {
-  logs.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+  const needsWixToken = /signed Wix instance\/app token/i.test(error.message);
+  if (needsWixToken) {
+    authModeValue.textContent = "Wix signed token";
+    apiKeyInput.closest("div").classList.add("realAuth");
+  }
+  logs.innerHTML = `<p>${escapeHtml(
+    needsWixToken
+      ? "Production mode requires a signed Wix instance/app token. Paste it in the protected routes field above."
+      : error.message
+  )}</p>`;
 });

@@ -54,6 +54,15 @@ button.secondary:hover {
   background: #eef3f8;
 }
 
+button.compact {
+  min-height: 34px;
+  margin-top: 9px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
 .shell {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
@@ -113,7 +122,7 @@ p {
 
 .statusStrip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -139,6 +148,7 @@ p {
   display: block;
   margin-top: 5px;
   font-size: 17px;
+  overflow-wrap: anywhere;
 }
 
 .inlineInput {
@@ -148,6 +158,18 @@ p {
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 6px 9px;
+}
+
+#wixTokenInput {
+  display: none;
+}
+
+.realAuth #apiKeyInput {
+  display: none;
+}
+
+.realAuth #wixTokenInput {
+  display: block;
 }
 
 .stepLabel {
@@ -310,5 +332,11 @@ label {
 
   .statusStrip {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 821px) and (max-width: 1120px) {
+  .statusStrip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

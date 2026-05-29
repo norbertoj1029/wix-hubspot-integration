@@ -10,9 +10,9 @@
     <main class="shell">
       <section class="topbar">
         <div>
-          <p class="eyebrow">Self-hosted app prototype</p>
+          <p class="eyebrow">Self-hosted Wix app</p>
           <h1>Wix HubSpot Integration</h1>
-          <p class="summary">Review the mapping rules, connect the demo account, then run the contact and form sync flows.</p>
+          <p class="summary">Manage HubSpot connection, Wix installation state, field mappings, polling fallback, and sync health.</p>
         </div>
         <div class="connection">
           <span id="connectionBadge" class="badge">Loading</span>
@@ -28,12 +28,26 @@
         </div>
         <div>
           <span>Protected routes</span>
-          <strong>API key enabled</strong>
-          <input id="apiKeyInput" class="inlineInput" type="password" placeholder="Webhook API key" autocomplete="off" />
+          <strong id="authModeValue">API key enabled</strong>
+          <input id="apiKeyInput" class="inlineInput mockCredential" type="password" placeholder="Webhook API key" autocomplete="off" />
+          <input id="wixTokenInput" class="inlineInput" type="password" placeholder="Wix signed instance token" autocomplete="off" />
         </div>
         <div>
-          <span>Conflict rule</span>
-          <strong>Latest updated wins</strong>
+          <span>Wix install</span>
+          <strong id="wixInstallValue">Not installed</strong>
+        </div>
+        <div>
+          <span>Production fallback</span>
+          <strong id="pollingValue">Not configured</strong>
+          <button id="pollHubspotBtn" class="secondary compact" type="button">Poll HubSpot</button>
+        </div>
+        <div>
+          <span>Last sync</span>
+          <strong id="lastSyncValue">None</strong>
+        </div>
+        <div>
+          <span>Retries</span>
+          <strong id="retryValue">0 pending</strong>
         </div>
       </section>
 
@@ -67,7 +81,7 @@
           </div>
         </article>
 
-        <article class="panel">
+        <article class="panel mockOnly">
           <p class="stepLabel">Demo step 1</p>
           <h2>Wix Contact Event</h2>
           <p>Simulates a Wix contact create/update webhook protected by the API key header.</p>
@@ -81,7 +95,7 @@
           </form>
         </article>
 
-        <article class="panel">
+        <article class="panel mockOnly">
           <p class="stepLabel">Demo step 2</p>
           <h2>HubSpot Contact Event</h2>
           <p>Simulates a HubSpot contact change flowing back into Wix through the same mapping rules.</p>
@@ -95,7 +109,7 @@
           </form>
         </article>
 
-        <article class="panel">
+        <article class="panel mockOnly">
           <p class="stepLabel">Demo step 3</p>
           <h2>Wix Form Lead Capture</h2>
           <p>Captures lead fields plus attribution context and syncs the lead to HubSpot.</p>
@@ -110,7 +124,7 @@
         </article>
 
         <article class="panel">
-          <h2>Demo Records</h2>
+          <h2 id="recordsTitle">Demo Records</h2>
           <p>Counts update after each simulated event.</p>
           <div class="metricGrid">
             <div><strong id="hubspotCount">0</strong><span>HubSpot contacts</span></div>
